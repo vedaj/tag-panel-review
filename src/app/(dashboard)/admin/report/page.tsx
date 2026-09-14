@@ -95,11 +95,12 @@ export default function ReportPage() {
   async function handleResetGrades(clearType = false) {
     setResetting(true)
     try {
-      await supabase.from('grades').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-      await supabase.from('feedback').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-      if (clearType) {
-        await supabase.from('groups').update({ project_type: null }).neq('id', '00000000-0000-0000-0000-000000000000')
-      }
+      const res = await fetch('/api/admin/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clearType }),
+      })
+      if (!res.ok) throw new Error('Reset failed')
       setConfirmReset(false)
       if (stats) setStats({ ...stats, grades: [] })
     } finally {
