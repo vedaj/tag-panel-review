@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import {
   ArrowLeft, Save, Users, MessageSquare, CheckCircle2, Loader2, Info, X,
-  FlaskConical, Smartphone, Code2,
+  FlaskConical, Smartphone, Code2, Trash2, AlertTriangle,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -68,6 +68,8 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
   const [error, setError] = useState<string | null>(null)
   const [settingType, setSettingType] = useState(false)
   const [rubricPopup, setRubricPopup] = useState<{ title: string; text: string } | null>(null)
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   const students = group.students
 
@@ -152,6 +154,29 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
       setError(err instanceof Error ? err.message : 'Failed to save')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleResetMarks() {
+    setResetting(true)
+    try {
+      const studentIds = students.map((s) => s.id)
+      if (studentIds.length > 0) {
+        await supabase.from('grades')
+          .delete()
+          .eq('faculty_id', facultyId)
+          .in('student_id', studentIds)
+      }
+      await supabase.from('feedback')
+        .delete()
+        .eq('faculty_id', facultyId)
+        .eq('group_id', group.id)
+      setGrades({})
+      setFeedbacks({})
+      setSaved(false)
+      setConfirmReset(false)
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -364,7 +389,15 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
             <Button variant="outline" size="sm" onClick={() => setShowFeedback(!showFeedback)} className="gap-1.5 hidden sm:flex">
               <MessageSquare size={14} /> Feedback
             </Button>
-            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
+            <Button
+              variant="outline" size="sm"
+              onClick={() => setConfirmReset((v) => !v)}
+              className="gap-1.5 text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
+              title="Reset my marks for this group"
+            >
+              <Trash2 size={14} /> Reset
+            </Button>
+            <Button size="sm" onClick={handleSave} disabled={saving || resetting} className="gap-1.5">
               {saving ? <><Loader2 size={14} className="animate-spin" />Saving…</>
                : saved ? <><CheckCircle2 size={14} />Saved</>
                : <><Save size={14} />Save</>}
@@ -379,6 +412,25 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
           <span className="flex items-center gap-1.5"><Users size={14} />{students.length} student{students.length !== 1 ? 's' : ''}</span>
           {group.guide1 && <span>Guide: <strong className="text-foreground">{group.guide1}{group.guide2 ? `, ${group.guide2}` : ''}</strong></span>}
         </div>
+
+        {confirmReset && (
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 16px', borderRadius: 'calc(var(--radius) * 1.4)', background: '#fff5f5', border: '1px solid #fecaca' }}>
+            <AlertTriangle size={16} style={{ color: '#dc2626', marginTop: 1, flexShrink: 0 }} />
+            <div style={{ flex: 1 }}>
+              <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: '#7f1d1d', fontWeight: 500 }}>
+                This will delete <strong>your grades and feedback</strong> for this group. Other faculty&apos;s marks are unaffected.
+              </p>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Button variant="destructive" size="sm" className="gap-1.5" onClick={handleResetMarks} disabled={resetting}>
+                  {resetting ? <><Loader2 size={13} className="animate-spin" />Resetting…</> : <>Yes, reset my marks</>}
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setConfirmReset(false)} disabled={resetting}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {error && <div className="text-sm text-destructive bg-destructive/10 rounded-md p-3">{error}</div>}
 
