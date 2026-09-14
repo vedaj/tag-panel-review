@@ -10,6 +10,7 @@ import {
   Upload,
   BookOpen,
   FileText,
+  Users as UsersIcon,
   LogOut,
   Menu,
   X,
@@ -28,6 +29,7 @@ const navItems: NavItem[] = [
   { label: 'Import Data', caption: 'Upload student data', href: '/admin/import', icon: Upload, adminOnly: true },
   { label: 'Rubrics', caption: 'Manage grading criteria', href: '/admin/rubrics', icon: BookOpen, adminOnly: true },
   { label: 'Report', caption: 'Download grade report', href: '/admin/report', icon: FileText, adminOnly: true },
+  { label: 'Users', caption: 'Manage faculty accounts', href: '/admin/users', icon: UsersIcon, adminOnly: true },
 ]
 
 interface SidebarProps {
