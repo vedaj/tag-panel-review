@@ -462,7 +462,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
                           ...thBase,
                           borderBottom: g.hasSub ? '1px solid hsl(var(--border) / 0.5)' : '2px solid hsl(var(--border))',
                           verticalAlign: 'middle',
-                          minWidth: 90,
+                          minWidth: 140,
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
@@ -490,7 +490,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
                       {gradeColumns.map((col) => {
                         if (col.subId === null) return null
                         return (
-                          <th key={col.key} style={{ ...thBase, fontSize: '0.68rem', fontWeight: 500, minWidth: 80 }}>
+                          <th key={col.key} style={{ ...thBase, fontSize: '0.68rem', fontWeight: 500, minWidth: 140 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
                               <span>{col.subTitle}</span>
                               {col.subDesc && (
@@ -705,30 +705,36 @@ function GradeInput({
     : generateOptions(max)
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 4, minWidth: 64 }}>
-      {options.map((opt) => (
-        <button
-          key={opt}
-          onClick={() => onChange(opt)}
-          title={`${opt} / ${max}`}
-          style={{
-            padding: '7px 4px',
-            minHeight: 38,
-            borderRadius: '8px',
-            border: `1.5px solid ${value === opt ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
-            background: value === opt ? 'hsl(var(--primary))' : 'hsl(var(--background))',
-            color: value === opt ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))',
-            fontSize: '0.88rem',
-            fontWeight: value === opt ? 700 : 500,
-            cursor: 'pointer',
-            transition: 'background 120ms ease, border-color 120ms ease',
-            touchAction: 'manipulation',
-            WebkitTapHighlightColor: 'transparent',
-          } as React.CSSProperties}
-        >
-          {opt}
-        </button>
-      ))}
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxWidth: 220 }}>
+      {options.map((opt) => {
+        const active = value === opt
+        return (
+          <button
+            key={opt}
+            onClick={() => onChange(opt)}
+            title={`${opt} / ${max}`}
+            style={{
+              minWidth: 32,
+              height: 32,
+              padding: '0 9px',
+              borderRadius: '999px',
+              border: `1.5px solid ${active ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
+              background: active ? 'hsl(var(--primary))' : 'hsl(var(--background))',
+              color: active ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))',
+              fontSize: '0.8rem',
+              fontWeight: active ? 700 : 500,
+              lineHeight: 1,
+              cursor: 'pointer',
+              transition: 'background 120ms ease, border-color 120ms ease, color 120ms ease',
+              touchAction: 'manipulation',
+              WebkitTapHighlightColor: 'transparent',
+              boxShadow: active ? '0 2px 8px -3px hsl(var(--primary) / 0.45)' : 'none',
+            } as React.CSSProperties}
+          >
+            {opt}
+          </button>
+        )
+      })}
     </div>
   )
 }
