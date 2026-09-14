@@ -1,15 +1,15 @@
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { generateAllReport, generateProjectTypeReport, downloadBlob, type ProjectType, type ReportData } from '@/lib/excel'
+import { generateAllReport, generateProjectTypeReport, generateAuditReport, downloadBlob, type ProjectType, type ReportData } from '@/lib/excel'
 import type { Group, Student, Profile, Criteria, Grade, Feedback } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import {
   FileDown, Loader2, RefreshCw, Users, CheckCircle2,
-  Microscope, AppWindow, Code2, Layers, Trash2, AlertTriangle,
+  Microscope, AppWindow, Code2, Layers, Trash2, AlertTriangle, ShieldCheck,
 } from 'lucide-react'
 
-type DownloadKey = ProjectType | 'all'
+type DownloadKey = ProjectType | 'all' | 'audit'
 
 interface Stats {
   groups: Group[]
@@ -82,6 +82,8 @@ export default function ReportPage() {
       const date = new Date().toISOString().slice(0, 10)
       if (key === 'all') {
         downloadBlob(generateAllReport(data), `TAG_All_Projects_${date}.xlsx`)
+      } else if (key === 'audit') {
+        downloadBlob(generateAuditReport(data), `TAG_Audit_${date}.xlsx`)
       } else {
         downloadBlob(generateProjectTypeReport(data, key), `TAG_${key}_report_${date}.xlsx`)
       }
@@ -291,6 +293,39 @@ export default function ReportPage() {
                 </button>
               ))}
             </div>
+          </div>
+        </div>
+
+        {/* ── Audit report ── */}
+        <div style={{ border: '1px solid hsl(var(--border))', borderRadius: 'calc(var(--radius) * 1.6)', overflow: 'hidden', background: 'hsl(var(--card))', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div className="card-header-slate">
+            <span className="card-header-slate-title">
+              <ShieldCheck size={15} style={{ color: 'var(--brand-600)' }} />
+              Audit Report
+            </span>
+          </div>
+          <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <p style={{ margin: 0, fontSize: '0.84rem', color: 'hsl(var(--muted-foreground))' }}>
+              One row per student per faculty — shows exactly which marks each evaluator awarded, for cross-checking and moderation. Confidential admin-only export.
+            </p>
+            <button
+              onClick={() => handleDownload('audit')}
+              disabled={busy}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+                padding: '9px 18px', borderRadius: 'calc(var(--radius) * 1.2)',
+                border: `1.5px solid ${downloading === 'audit' ? 'var(--brand-600)' : 'hsl(var(--border))'}`,
+                background: 'hsl(var(--card))', color: downloading === 'audit' ? 'var(--brand-600)' : 'hsl(var(--foreground))',
+                fontWeight: 600, fontSize: '0.88rem', cursor: busy ? 'not-allowed' : 'pointer',
+                opacity: busy && downloading !== 'audit' ? 0.5 : 1,
+                whiteSpace: 'nowrap', flexShrink: 0,
+                transition: 'opacity 0.12s, border-color 0.12s',
+              }}
+            >
+              {downloading === 'audit'
+                ? <><Loader2 size={14} className="animate-spin" />Generating…</>
+                : <><FileDown size={14} />Download Audit</>}
+            </button>
           </div>
         </div>
 
