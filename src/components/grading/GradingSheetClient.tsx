@@ -320,7 +320,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
   // ── Shared cell styles ────────────────────────────────────────────────────
   // Roll No: first sticky col (left: 0)
   // Student name: second sticky col (left: ROLL_W)
-  const ROLL_W = 72
+  const ROLL_W = 58
   const ROLL_PREFIX = 'CB.SC.U4CSE'
   const shortRoll = (r: string) => r.startsWith(ROLL_PREFIX) ? r.slice(ROLL_PREFIX.length) : r
 
@@ -503,18 +503,23 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
                         }}
                       >
                         <div style={{ lineHeight: 1.4 }}>
-                          <span style={{ color: 'var(--app-hero-text)' }}>{g.critTitle}</span>
-                          {g.critDesc && (
-                            <button
-                              onClick={() => setRubricPopup({ title: g.critTitle, text: g.critDesc })}
-                              title="View rubric"
-                              style={{ display: 'inline-flex', verticalAlign: 'middle', marginLeft: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--primary))', padding: 0, lineHeight: 1, touchAction: 'manipulation' }}
-                            >
-                              <Info size={12} />
-                            </button>
-                          )}
+                          {g.critTitle.split('/').map((part, i, arr) => (
+                            <span key={i}>
+                              {i > 0 && <br />}
+                              <span style={{ color: 'var(--app-hero-text)' }}>{part.trim()}</span>
+                              {i === arr.length - 1 && g.critDesc && (
+                                <button
+                                  onClick={() => setRubricPopup({ title: g.critTitle, text: g.critDesc })}
+                                  title="View rubric"
+                                  style={{ display: 'inline-flex', verticalAlign: 'middle', marginLeft: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--primary))', padding: 0, lineHeight: 1, touchAction: 'manipulation' }}
+                                >
+                                  <Info size={12} />
+                                </button>
+                              )}
+                            </span>
+                          ))}
                         </div>
-                        <div style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.65rem', marginTop: 3 }}>/{g.max} mk</div>
+                        <div style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.65rem', marginTop: 3 }}>({g.max} Marks)</div>
                       </th>
                     ))}
                     <th style={{ ...thBase, borderBottom: '2px solid hsl(var(--border))', minWidth: 64 }} rowSpan={hasAnySub ? 2 : 1}>
