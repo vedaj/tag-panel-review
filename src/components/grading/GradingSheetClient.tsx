@@ -299,7 +299,9 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
     background: 'hsl(var(--muted))',
     borderBottom: '2px solid hsl(var(--border))',
     borderRight: '1px solid hsl(var(--border) / 0.5)',
-    whiteSpace: 'nowrap',
+    whiteSpace: 'normal',
+    lineHeight: 1.3,
+    maxWidth: 160,
   }
   const stickyRollTh: React.CSSProperties = {
     ...thBase,

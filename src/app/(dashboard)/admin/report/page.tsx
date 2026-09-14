@@ -95,6 +95,7 @@ export default function ReportPage() {
     try {
       await supabase.from('grades').delete().neq('id', '00000000-0000-0000-0000-000000000000')
       await supabase.from('feedback').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      await supabase.from('groups').update({ project_type: null }).neq('id', '00000000-0000-0000-0000-000000000000')
       setConfirmReset(false)
       if (stats) setStats({ ...stats, grades: [] })
     } finally {
@@ -305,7 +306,7 @@ export default function ReportPage() {
             {!confirmReset ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                 <p style={{ margin: 0, fontSize: '0.84rem', color: 'hsl(var(--muted-foreground))' }}>
-                  Permanently deletes all grade entries and feedback comments for every student. This cannot be undone.
+                  Permanently deletes all grade entries and feedback comments for every student, and clears the project type on every group. This cannot be undone.
                 </p>
                 <Button variant="destructive" className="gap-2" onClick={() => setConfirmReset(true)} style={{ flexShrink: 0 }}>
                   <Trash2 size={14} />Reset All Grades
@@ -316,7 +317,7 @@ export default function ReportPage() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px', borderRadius: 'calc(var(--radius) * 1.2)', background: '#fff5f5', border: '1px solid #fecaca' }}>
                   <AlertTriangle size={15} style={{ color: '#dc2626', marginTop: 1, flexShrink: 0 }} />
                   <p style={{ margin: 0, fontSize: '0.84rem', color: '#7f1d1d' }}>
-                    This will delete <strong>all grades and feedback</strong> for every student and group. Are you absolutely sure?
+                    This will delete <strong>all grades and feedback</strong> for every student and group, and <strong>clear the project type</strong> on every group. Are you absolutely sure?
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
