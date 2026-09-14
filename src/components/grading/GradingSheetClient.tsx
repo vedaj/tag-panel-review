@@ -171,8 +171,10 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
         .delete()
         .eq('faculty_id', facultyId)
         .eq('group_id', group.id)
+      await supabase.from('groups').update({ project_type: null }).eq('id', group.id)
       setGrades({})
       setFeedbacks({})
+      setProjectTypeState('')
       setSaved(false)
       setConfirmReset(false)
     } finally {
