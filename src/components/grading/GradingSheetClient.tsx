@@ -158,7 +158,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
     }
   }
 
-  async function handleResetMarks() {
+  async function handleResetMarks(clearType = false) {
     setResetting(true)
     try {
       const studentIds = students.map((s) => s.id)
@@ -172,10 +172,12 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
         .delete()
         .eq('faculty_id', facultyId)
         .eq('group_id', group.id)
-      await supabase.from('groups').update({ project_type: null }).eq('id', group.id)
+      if (clearType) {
+        await supabase.from('groups').update({ project_type: null }).eq('id', group.id)
+        setProjectTypeState('')
+      }
       setGrades({})
       setFeedbacks({})
-      setProjectTypeState('')
       setSaved(false)
       setConfirmReset(false)
     } finally {
@@ -455,11 +457,15 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
             <AlertTriangle size={16} style={{ color: '#dc2626', marginTop: 1, flexShrink: 0 }} />
             <div style={{ flex: 1 }}>
               <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: '#7f1d1d', fontWeight: 500 }}>
-                This will delete <strong>your grades and feedback</strong> for this group. Other faculty&apos;s marks are unaffected.
+                Choose what to reset. Other faculty&apos;s marks are unaffected.
               </p>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <Button variant="destructive" size="sm" className="gap-1.5" onClick={handleResetMarks} disabled={resetting}>
-                  {resetting ? <><Loader2 size={13} className="animate-spin" />Resetting…</> : <>Yes, reset my marks</>}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => handleResetMarks(false)} disabled={resetting}>
+                  {resetting ? <><Loader2 size={13} className="animate-spin" />Resetting…</> : <>Reset marks only</>}
+                </Button>
+                <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => handleResetMarks(true)} disabled={resetting}
+                  style={{ opacity: resetting ? 0.6 : 1, background: '#7f1d1d' }}>
+                  {resetting ? <><Loader2 size={13} className="animate-spin" />Resetting…</> : <>Reset marks &amp; project type</>}
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => setConfirmReset(false)} disabled={resetting}>
                   Cancel
