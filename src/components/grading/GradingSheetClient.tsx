@@ -208,13 +208,14 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
   }, [visibleCriteria])
 
   const critGroups = useMemo(() => {
-    const groups: { critId: string; critTitle: string; critDesc: string; count: number; hasSub: boolean }[] = []
+    const groups: { critId: string; critTitle: string; critDesc: string; count: number; hasSub: boolean; max: number }[] = []
     for (const col of gradeColumns) {
       const last = groups[groups.length - 1]
       if (last && last.critId === col.critId) {
         last.count++
+        last.max += col.max
       } else {
-        groups.push({ critId: col.critId, critTitle: col.critTitle, critDesc: col.critDesc, count: 1, hasSub: col.subId !== null })
+        groups.push({ critId: col.critId, critTitle: col.critTitle, critDesc: col.critDesc, count: 1, hasSub: col.subId !== null, max: col.max })
       }
     }
     return groups
@@ -350,7 +351,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
     position: 'sticky',
     left: ROLL_W,
     zIndex: 3,
-    minWidth: 110,
+    minWidth: 140,
     textAlign: 'left',
     borderRight: '2px solid hsl(var(--border))',
   }
@@ -382,6 +383,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
     textAlign: 'left',
     fontWeight: 500,
     fontSize: '0.85rem',
+    minWidth: 140,
     background: bg,
     borderRight: '2px solid hsl(var(--border))',
   })
@@ -497,21 +499,22 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
                           ...thBase,
                           borderBottom: g.hasSub ? '1px solid hsl(var(--border) / 0.5)' : '2px solid hsl(var(--border))',
                           verticalAlign: 'middle',
-                          minWidth: 140,
+                          minWidth: 110,
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                        <div style={{ lineHeight: 1.4 }}>
                           <span style={{ color: 'var(--app-hero-text)' }}>{g.critTitle}</span>
                           {g.critDesc && (
                             <button
                               onClick={() => setRubricPopup({ title: g.critTitle, text: g.critDesc })}
                               title="View rubric"
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--primary))', padding: 0, lineHeight: 1, touchAction: 'manipulation' }}
+                              style={{ display: 'inline-flex', verticalAlign: 'middle', marginLeft: 3, background: 'none', border: 'none', cursor: 'pointer', color: 'hsl(var(--primary))', padding: 0, lineHeight: 1, touchAction: 'manipulation' }}
                             >
-                              <Info size={13} />
+                              <Info size={12} />
                             </button>
                           )}
                         </div>
+                        <div style={{ color: 'hsl(var(--muted-foreground))', fontSize: '0.65rem', marginTop: 3 }}>/{g.max} mk</div>
                       </th>
                     ))}
                     <th style={{ ...thBase, borderBottom: '2px solid hsl(var(--border))', minWidth: 64 }} rowSpan={hasAnySub ? 2 : 1}>
@@ -525,7 +528,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
                       {gradeColumns.map((col) => {
                         if (col.subId === null) return null
                         return (
-                          <th key={col.key} style={{ ...thBase, fontSize: '0.68rem', fontWeight: 500, minWidth: 140 }}>
+                          <th key={col.key} style={{ ...thBase, fontSize: '0.68rem', fontWeight: 500, minWidth: 110 }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
                               <span>{col.subTitle}</span>
                               {col.subDesc && (
@@ -557,7 +560,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
                   {students.map((student, si) => {
                     const rowBg = si % 2 === 0 ? 'hsl(var(--card))' : 'hsl(var(--muted) / 0.35)'
                     const tc = toTitleCase(student.name)
-                    const displayName = tc.length > 12 ? tc.slice(0, 12) + '…' : tc
+                    const displayName = tc.length > 18 ? tc.slice(0, 18) + '…' : tc
                     return (
                       <tr key={student.id} style={{ background: rowBg }}>
                         <td style={stickyRollTd(rowBg)} title={student.roll_number}>{shortRoll(student.roll_number)}</td>
@@ -740,7 +743,7 @@ function GradeInput({
     : generateOptions(max)
 
   return (
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, maxWidth: 220 }}>
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, justifyContent: 'center', width: '100%' }}>
       {options.map((opt) => {
         const active = value === opt
         return (
