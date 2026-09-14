@@ -288,7 +288,9 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
   // ── Shared cell styles ────────────────────────────────────────────────────
   // Roll No: first sticky col (left: 0)
   // Student name: second sticky col (left: ROLL_W)
-  const ROLL_W = 120
+  const ROLL_W = 72
+  const ROLL_PREFIX = 'CB.SC.U4CSE'
+  const shortRoll = (r: string) => r.startsWith(ROLL_PREFIX) ? r.slice(ROLL_PREFIX.length) : r
 
   const thBase: React.CSSProperties = {
     padding: '10px 12px',
@@ -527,7 +529,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
                     const displayName = tc.length > 12 ? tc.slice(0, 12) + '…' : tc
                     return (
                       <tr key={student.id} style={{ background: rowBg }}>
-                        <td style={stickyRollTd(rowBg)}>{student.roll_number}</td>
+                        <td style={stickyRollTd(rowBg)} title={student.roll_number}>{shortRoll(student.roll_number)}</td>
                         <td
                           style={stickyNameTd(rowBg)}
                           title={tc.length > 12 ? tc : undefined}
@@ -613,7 +615,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
                 {students.map((s) => (
                   <div key={s.id}>
                     <label className="text-sm text-muted-foreground mb-1.5 block">
-                      {toTitleCase(s.name)} <span className="text-xs">({s.roll_number})</span>
+                      {toTitleCase(s.name)} <span className="text-xs" title={s.roll_number}>({shortRoll(s.roll_number)})</span>
                     </label>
                     <Textarea
                       placeholder={`Feedback for ${toTitleCase(s.name).split(' ')[0]}…`}
