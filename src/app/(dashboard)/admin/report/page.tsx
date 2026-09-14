@@ -5,7 +5,7 @@ import { generateAllReport, generateProjectTypeReport, downloadBlob, type Projec
 import type { Group, Student, Profile, Criteria, Grade, Feedback } from '@/types/database'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { FileDown, Loader2, RefreshCw, BarChart3, Users, CheckCircle2, Microscope, AppWindow, Code2, Layers } from 'lucide-react'
+import { FileDown, Loader2, RefreshCw, BarChart3, Users, CheckCircle2, Microscope, AppWindow, Code2, Layers, Trash2, AlertTriangle } from 'lucide-react'
 
 interface Stats {
   groups: Group[]
@@ -27,6 +27,8 @@ export default function ReportPage() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(false)
   const [downloading, setDownloading] = useState<DownloadKey | null>(null)
+  const [confirmReset, setConfirmReset] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   async function loadStats() {
     setLoading(true)
@@ -84,6 +86,18 @@ export default function ReportPage() {
       }
     } finally {
       setDownloading(null)
+    }
+  }
+
+  async function handleResetGrades() {
+    setResetting(true)
+    try {
+      await supabase.from('grades').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      await supabase.from('feedback').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      setConfirmReset(false)
+      if (stats) setStats({ ...stats, gradedCount: 0 })
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -153,6 +167,44 @@ export default function ReportPage() {
                 ? <><Loader2 className="animate-spin" size={16} />Generating…</>
                 : <><FileDown size={16} />Download All Projects</>}
             </Button>
+          </CardContent>
+        </Card>
+
+        {/* Reset grades */}
+        <Card style={{ borderColor: confirmReset ? 'hsl(0 72% 51% / 0.4)' : undefined }}>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2 text-destructive">
+              <Trash2 size={18} />
+              Reset All Grades
+            </CardTitle>
+            <CardDescription>
+              Permanently deletes all grade entries and all feedback comments for every student and group. This cannot be undone.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {!confirmReset ? (
+              <Button variant="destructive" className="gap-2" onClick={() => setConfirmReset(true)}>
+                <Trash2 size={15} />
+                Reset All Grades
+              </Button>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', borderRadius: 8, background: 'hsl(0 72% 51% / 0.08)', border: '1px solid hsl(0 72% 51% / 0.25)' }}>
+                  <AlertTriangle size={16} style={{ color: 'hsl(0 72% 51%)', marginTop: 1, flexShrink: 0 }} />
+                  <p style={{ fontSize: '0.85rem', color: 'hsl(var(--foreground))', margin: 0 }}>
+                    This will delete <strong>all grades and feedback</strong> for every student. Are you sure?
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <Button variant="destructive" className="gap-2" onClick={handleResetGrades} disabled={resetting}>
+                    {resetting ? <><Loader2 size={14} className="animate-spin" />Deleting…</> : <>Yes, delete everything</>}
+                  </Button>
+                  <Button variant="outline" onClick={() => setConfirmReset(false)} disabled={resetting}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
