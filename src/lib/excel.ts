@@ -205,12 +205,113 @@ function buildSheet(data: ReportData, projectType: ProjectType): XLSX.WorkSheet 
   return ws
 }
 
-/** One sheet per project type in a single workbook (the "all" download). */
+/**
+ * Single combined sheet across all project types.
+ * Criteria are labelled Criteria 1–4 (positional by order_index within each type).
+ */
 export function generateAllReport(data: ReportData): Blob {
-  const wb = XLSX.utils.book_new()
-  for (const type of ALL_TYPES) {
-    XLSX.utils.book_append_sheet(wb, buildSheet(data, type), capitalize(type))
+  const { groups, students, faculty, criteria, grades, feedback } = data
+
+  const NUM_CRITERIA = 4
+  const generatedDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
+
+  const headers: string[] = [
+    'Group',
+    'Project Title',
+    'Project Type',
+    'Guide 1',
+    'Guide 2',
+    'Roll Number',
+    'Student Name',
+    'Criteria 1',
+    'Criteria 2',
+    'Criteria 3',
+    'Criteria 4',
+    'Total',
+    'Max Marks',
+    '% Score',
+    'Student Comments',
+    'Group Comments',
+  ]
+
+  const aoa: (string | number | null)[][] = [
+    ['Amrita Vishwa Vidyapeetham — Data Science TAG Panel Review', ...Array(headers.length - 1).fill(null)],
+    ['All Project Types — Combined Report', ...Array(headers.length - 1).fill(null)],
+    [`Generated: ${generatedDate}`, ...Array(headers.length - 1).fill(null)],
+    Array(headers.length).fill(null),
+    headers,
+  ]
+
+  const allGroups = [...groups].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+  )
+
+  for (const group of allGroups) {
+    const projectType = group.project_type as ProjectType | null
+    if (!projectType) continue
+
+    const typeCriteria = criteria
+      .filter((c) => c.project_type === projectType)
+      .sort((a, b) => a.order_index - b.order_index)
+      .slice(0, NUM_CRITERIA)
+
+    const maxTotal = typeCriteria.reduce((a, c) => a + c.max_marks, 0)
+    const groupComments = gatherComments(feedback, faculty, group.id, null)
+
+    const groupStudents = students
+      .filter((s) => s.group_id === group.id)
+      .sort((a, b) => a.roll_number.localeCompare(b.roll_number))
+
+    for (const student of groupStudents) {
+      const scores = typeCriteria.map((c) => critMean(student.id, c, grades))
+      // Pad to 4 columns if fewer criteria defined
+      while (scores.length < NUM_CRITERIA) scores.push(0)
+
+      const total = parseFloat(scores.reduce((a, b) => a + b, 0).toFixed(2))
+      const pct = maxTotal > 0 ? parseFloat(((total / maxTotal) * 100).toFixed(1)) : 0
+      const studentComments = gatherComments(feedback, faculty, group.id, student.id)
+
+      aoa.push([
+        group.name,
+        group.project_title,
+        capitalize(projectType),
+        group.guide1,
+        group.guide2 ?? '',
+        student.roll_number,
+        student.name,
+        ...scores,
+        total,
+        maxTotal,
+        pct,
+        studentComments,
+        groupComments,
+      ])
+    }
   }
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomLeft', state: 'frozen' }
+  ws['!cols'] = [
+    { wch: 14 },  // Group
+    { wch: 32 },  // Project Title
+    { wch: 16 },  // Project Type
+    { wch: 22 },  // Guide 1
+    { wch: 22 },  // Guide 2
+    { wch: 14 },  // Roll Number
+    { wch: 22 },  // Student Name
+    { wch: 14 },  // Criteria 1
+    { wch: 14 },  // Criteria 2
+    { wch: 14 },  // Criteria 3
+    { wch: 14 },  // Criteria 4
+    { wch: 10 },  // Total
+    { wch: 10 },  // Max Marks
+    { wch: 10 },  // % Score
+    { wch: 44 },  // Student Comments
+    { wch: 44 },  // Group Comments
+  ]
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'All Groups')
   const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
   return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
 }
