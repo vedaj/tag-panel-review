@@ -3,20 +3,22 @@ import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
 import { generateAllReport, generateProjectTypeReport, downloadBlob, type ProjectType, type ReportData } from '@/lib/excel'
 import type { Group, Student, Profile, Criteria, Grade, Feedback } from '@/types/database'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { FileDown, Loader2, RefreshCw, BarChart3, Users, CheckCircle2, Microscope, AppWindow, Code2, Layers, Trash2, AlertTriangle } from 'lucide-react'
+import {
+  FileDown, Loader2, RefreshCw, Users, CheckCircle2,
+  Microscope, AppWindow, Code2, Layers, Trash2, AlertTriangle,
+} from 'lucide-react'
+
+type DownloadKey = ProjectType | 'all'
 
 interface Stats {
   groups: Group[]
   students: Student[]
   faculty: Profile[]
-  gradedCount: number
+  grades: { student_id: string }[]
 }
 
-type DownloadKey = ProjectType | 'all'
-
-const TYPE_OPTIONS: { key: ProjectType; label: string; icon: React.ReactNode; color: string }[] = [
+const PROJECT_TYPES: { key: ProjectType; label: string; icon: React.ReactNode; color: string }[] = [
   { key: 'research',    label: 'Research Based',    icon: <Microscope size={14} />, color: 'hsl(220 80% 55%)' },
   { key: 'application', label: 'Application Based', icon: <AppWindow  size={14} />, color: 'hsl(160 60% 40%)' },
   { key: 'software',    label: 'Software Based',    icon: <Code2      size={14} />, color: 'hsl(270 60% 55%)' },
@@ -36,14 +38,13 @@ export default function ReportPage() {
       supabase.from('groups').select('*').order('name'),
       supabase.from('students').select('*'),
       supabase.from('profiles').select('*'),
-      supabase.from('grades').select('student_id').limit(10000),
+      supabase.from('grades').select('student_id').limit(50000),
     ])
-    const gradedStudentIds = new Set(grades?.map((g: { student_id: string }) => g.student_id) ?? [])
     setStats({
       groups: groups ?? [],
       students: students ?? [],
       faculty: faculty ?? [],
-      gradedCount: gradedStudentIds.size,
+      grades: grades ?? [],
     })
     setLoading(false)
   }
@@ -95,104 +96,227 @@ export default function ReportPage() {
       await supabase.from('grades').delete().neq('id', '00000000-0000-0000-0000-000000000000')
       await supabase.from('feedback').delete().neq('id', '00000000-0000-0000-0000-000000000000')
       setConfirmReset(false)
-      if (stats) setStats({ ...stats, gradedCount: 0 })
+      if (stats) setStats({ ...stats, grades: [] })
     } finally {
       setResetting(false)
     }
   }
 
+  // Per-type breakdown
+  const gradedIds = new Set(stats?.grades.map((g) => g.student_id) ?? [])
+
+  function typeRow(type: ProjectType | null) {
+    if (!stats) return null
+    const groups = type ? stats.groups.filter((g) => g.project_type === type) : stats.groups
+    const students = type
+      ? stats.students.filter((s) => groups.some((g) => g.id === s.group_id))
+      : stats.students
+    const graded = students.filter((s) => gradedIds.has(s.id)).length
+    const pct = students.length > 0 ? Math.round((graded / students.length) * 100) : 0
+    return { groups: groups.length, students: students.length, graded, pct }
+  }
+
   const busy = downloading !== null
 
   return (
-    <div className="p-6 md:p-8 pt-20 md:pt-8 max-w-3xl">
-      <div className="mb-8">
-        <p className="eyebrow mb-1">Admin</p>
-        <h1 style={{ margin: 0, fontFamily: 'var(--title-font)', fontSize: '1.8rem', letterSpacing: '-0.03em', color: 'var(--app-hero-text)' }}>
+    <div className="p-6 md:p-8 pt-20 md:pt-8" style={{ maxWidth: 780 }}>
+      {/* Page header */}
+      <div style={{ marginBottom: 28 }}>
+        <p className="eyebrow" style={{ marginBottom: 4 }}>Admin</p>
+        <h1 style={{ margin: 0, fontFamily: 'var(--title-font)', fontSize: '1.9rem', letterSpacing: '-0.03em', color: 'var(--app-hero-text)', lineHeight: 1.1 }}>
           Grade Report
         </h1>
-        <p style={{ color: 'var(--app-hero-subtext)', fontSize: '0.88rem', marginTop: 4 }}>
-          Download grade reports for all projects or filtered by type. Each sheet includes 4 criteria (mean across faculty who graded), student comments, and group comments.
+        <p style={{ color: 'var(--app-hero-subtext)', fontSize: '0.88rem', marginTop: 6 }}>
+          Monitor grading progress and export results by project type.
         </p>
       </div>
 
-      <div className="space-y-6">
-        {/* Stats */}
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base flex items-center gap-2">
-                <BarChart3 size={18} />
-                Current Status
-              </CardTitle>
-              <Button variant="outline" size="sm" onClick={loadStats} disabled={loading} className="gap-1.5">
-                {loading ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-                {stats ? 'Refresh' : 'Load Stats'}
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {!stats && !loading && (
-              <p className="text-sm text-muted-foreground">Click &quot;Load Stats&quot; to see current progress.</p>
-            )}
-            {stats && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                <StatCard label="Groups"          value={stats.groups.length}    icon={<Users size={18} />} />
-                <StatCard label="Students"        value={stats.students.length}  icon={<Users size={18} />} />
-                <StatCard label="Faculty"         value={stats.faculty.length}   icon={<Users size={18} />} />
-                <StatCard label="Students Graded" value={stats.gradedCount}      icon={<CheckCircle2 size={18} />} highlight />
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      <div style={{ display: 'grid', gap: 20 }}>
 
-        {/* Overall download */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <Layers size={18} />
-              All Projects
-            </CardTitle>
-            <CardDescription>
-              One file with three sheets — Research, Application, and Software — each with all groups of that type.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              size="lg"
+        {/* ── Progress stats ── */}
+        <div style={{ border: '1px solid hsl(var(--border))', borderRadius: 'calc(var(--radius) * 1.6)', overflow: 'hidden', background: 'hsl(var(--card))', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div className="card-header-slate">
+            <span className="card-header-slate-title">
+              <CheckCircle2 size={15} style={{ color: 'var(--brand-600)' }} />
+              Grading Progress
+            </span>
+            <button
+              onClick={loadStats}
+              disabled={loading}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '5px 12px', borderRadius: 'calc(var(--radius) * 1.2)',
+                border: '1px solid hsl(var(--border))', background: 'white',
+                fontSize: '0.78rem', fontWeight: 500, cursor: loading ? 'wait' : 'pointer',
+                color: '#475569', transition: 'background 0.12s',
+              }}
+            >
+              {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+              {stats ? 'Refresh' : 'Load Stats'}
+            </button>
+          </div>
+
+          {!stats ? (
+            <div style={{ padding: '28px 20px', color: 'hsl(var(--muted-foreground))', fontSize: '0.84rem', textAlign: 'center' }}>
+              Click &ldquo;Load Stats&rdquo; to see current grading progress.
+            </div>
+          ) : (
+            <table className="progress-table">
+              <thead>
+                <tr>
+                  <th>Project Type</th>
+                  <th>Groups</th>
+                  <th>Students</th>
+                  <th>Graded</th>
+                  <th>Progress</th>
+                </tr>
+              </thead>
+              <tbody>
+                {PROJECT_TYPES.map(({ key, label, icon, color }) => {
+                  const row = typeRow(key)
+                  if (!row) return null
+                  const pillBg = row.pct === 100 ? '#dcfce7' : row.pct >= 50 ? '#fef9c3' : '#fee2e2'
+                  const pillColor = row.pct === 100 ? '#166534' : row.pct >= 50 ? '#854d0e' : '#991b1b'
+                  return (
+                    <tr key={key}>
+                      <td>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 7, color, fontWeight: 600 }}>
+                          {icon}{label}
+                        </span>
+                      </td>
+                      <td>{row.groups}</td>
+                      <td>{row.students}</td>
+                      <td>{row.graded} / {row.students}</td>
+                      <td>
+                        <span className="pct-pill" style={{ background: pillBg, color: pillColor }}>
+                          {row.pct}%
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+                {(() => {
+                  const all = typeRow(null)
+                  if (!all) return null
+                  const pillBg = all.pct === 100 ? '#dcfce7' : all.pct >= 50 ? '#fef9c3' : '#fee2e2'
+                  const pillColor = all.pct === 100 ? '#166534' : all.pct >= 50 ? '#854d0e' : '#991b1b'
+                  return (
+                    <tr style={{ fontWeight: 700, background: '#f8fafc' }}>
+                      <td>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 7, color: '#334155', fontWeight: 700 }}>
+                          <Users size={14} />All Types
+                        </span>
+                      </td>
+                      <td>{all.groups}</td>
+                      <td>{all.students}</td>
+                      <td>{all.graded} / {all.students}</td>
+                      <td>
+                        <span className="pct-pill" style={{ background: pillBg, color: pillColor }}>
+                          {all.pct}%
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })()}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* ── Download all ── */}
+        <div style={{ border: '1px solid hsl(var(--border))', borderRadius: 'calc(var(--radius) * 1.6)', overflow: 'hidden', background: 'hsl(var(--card))', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div className="card-header-slate">
+            <span className="card-header-slate-title">
+              <Layers size={15} style={{ color: 'var(--brand-600)' }} />
+              Complete Report
+            </span>
+          </div>
+          <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <p style={{ margin: 0, fontSize: '0.84rem', color: 'hsl(var(--muted-foreground))' }}>
+              One file with three sheets — Research, Application, and Software — each containing all groups of that type with criteria scores, student comments, and group comments.
+            </p>
+            <button
               onClick={() => handleDownload('all')}
               disabled={busy}
-              className="gap-2"
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+                padding: '9px 18px', borderRadius: 'calc(var(--radius) * 1.2)',
+                border: 0, background: 'var(--brand-600)', color: 'white',
+                fontWeight: 600, fontSize: '0.88rem', cursor: busy ? 'not-allowed' : 'pointer',
+                opacity: busy && downloading !== 'all' ? 0.5 : 1,
+                boxShadow: '0 4px 14px -6px var(--brand-600)',
+                whiteSpace: 'nowrap', flexShrink: 0,
+                transition: 'opacity 0.12s, transform 0.12s',
+              }}
+              onMouseEnter={(e) => { if (!busy) e.currentTarget.style.transform = 'translateY(-1px)' }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform = '' }}
             >
               {downloading === 'all'
-                ? <><Loader2 className="animate-spin" size={16} />Generating…</>
-                : <><FileDown size={16} />Download All Projects</>}
-            </Button>
-          </CardContent>
-        </Card>
+                ? <><Loader2 size={14} className="animate-spin" />Generating…</>
+                : <><FileDown size={14} />Download All</>}
+            </button>
+          </div>
+        </div>
 
-        {/* Reset grades */}
-        <Card style={{ borderColor: confirmReset ? 'hsl(0 72% 51% / 0.4)' : undefined }}>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2 text-destructive">
-              <Trash2 size={18} />
+        {/* ── Per-type downloads ── */}
+        <div style={{ border: '1px solid hsl(var(--border))', borderRadius: 'calc(var(--radius) * 1.6)', overflow: 'hidden', background: 'hsl(var(--card))', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div className="card-header-slate">
+            <span className="card-header-slate-title">
+              <FileDown size={15} style={{ color: 'var(--brand-600)' }} />
+              Download by Project Type
+            </span>
+          </div>
+          <div style={{ padding: '18px 20px' }}>
+            <p style={{ margin: '0 0 14px', fontSize: '0.83rem', color: 'hsl(var(--muted-foreground))' }}>
+              Group, title, guides, roll numbers, 4 criteria means, total, %, per-student comments, and group comments.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              {PROJECT_TYPES.map(({ key, label, icon, color }) => (
+                <button
+                  key={key}
+                  onClick={() => handleDownload(key)}
+                  disabled={busy}
+                  className="download-card"
+                  style={{ opacity: busy && downloading !== key ? 0.5 : 1 }}
+                >
+                  <span className="download-card-label" style={{ color }}>
+                    {downloading === key ? <Loader2 size={13} className="animate-spin" /> : icon}
+                    {label}
+                  </span>
+                  <span className="download-card-sub">
+                    <FileDown size={12} />
+                    {downloading === key ? 'Generating…' : 'Download .xlsx'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Reset grades ── */}
+        <div style={{ border: confirmReset ? '1px solid hsl(0 84% 60% / 0.35)' : '1px solid hsl(var(--border))', borderRadius: 'calc(var(--radius) * 1.6)', overflow: 'hidden', background: 'hsl(var(--card))', boxShadow: '0 1px 4px rgba(0,0,0,0.06)', transition: 'border-color 0.2s' }}>
+          <div className="card-header-slate" style={{ background: confirmReset ? '#fff5f5' : undefined }}>
+            <span className="card-header-slate-title" style={{ color: '#dc2626' }}>
+              <Trash2 size={15} />
               Reset All Grades
-            </CardTitle>
-            <CardDescription>
-              Permanently deletes all grade entries and all feedback comments for every student and group. This cannot be undone.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+            </span>
+          </div>
+          <div style={{ padding: '18px 20px' }}>
             {!confirmReset ? (
-              <Button variant="destructive" className="gap-2" onClick={() => setConfirmReset(true)}>
-                <Trash2 size={15} />
-                Reset All Grades
-              </Button>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                <p style={{ margin: 0, fontSize: '0.84rem', color: 'hsl(var(--muted-foreground))' }}>
+                  Permanently deletes all grade entries and feedback comments for every student. This cannot be undone.
+                </p>
+                <Button variant="destructive" className="gap-2" onClick={() => setConfirmReset(true)} style={{ flexShrink: 0 }}>
+                  <Trash2 size={14} />Reset All Grades
+                </Button>
+              </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '12px 14px', borderRadius: 8, background: 'hsl(0 72% 51% / 0.08)', border: '1px solid hsl(0 72% 51% / 0.25)' }}>
-                  <AlertTriangle size={16} style={{ color: 'hsl(0 72% 51%)', marginTop: 1, flexShrink: 0 }} />
-                  <p style={{ fontSize: '0.85rem', color: 'hsl(var(--foreground))', margin: 0 }}>
-                    This will delete <strong>all grades and feedback</strong> for every student. Are you sure?
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px', borderRadius: 'calc(var(--radius) * 1.2)', background: '#fff5f5', border: '1px solid #fecaca' }}>
+                  <AlertTriangle size={15} style={{ color: '#dc2626', marginTop: 1, flexShrink: 0 }} />
+                  <p style={{ margin: 0, fontSize: '0.84rem', color: '#7f1d1d' }}>
+                    This will delete <strong>all grades and feedback</strong> for every student and group. Are you absolutely sure?
                   </p>
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -205,89 +329,10 @@ export default function ReportPage() {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        {/* Per-type downloads */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileDown size={18} />
-              Download by Project Type
-            </CardTitle>
-            <CardDescription>
-              Individual file for each project type: group, title, guides, roll numbers, names, 4 criteria means, total, %, per-student comments, group comments.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid sm:grid-cols-3 gap-3">
-              {TYPE_OPTIONS.map(({ key, label, icon, color }) => (
-                <TypeButton
-                  key={key}
-                  label={label}
-                  icon={icon}
-                  color={color}
-                  loading={downloading === key}
-                  disabled={busy}
-                  onClick={() => handleDownload(key)}
-                />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       </div>
-    </div>
-  )
-}
-
-function TypeButton({
-  label, icon, color, loading, disabled, onClick,
-}: {
-  label: string; icon: React.ReactNode; color: string
-  loading: boolean; disabled: boolean; onClick: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 12,
-        padding: '16px 18px', borderRadius: 10,
-        border: '1.5px solid hsl(var(--border))',
-        background: 'hsl(var(--card))',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        opacity: disabled && !loading ? 0.5 : 1,
-        transition: 'border-color 0.15s, box-shadow 0.15s',
-      }}
-      onMouseEnter={(e) => {
-        if (!disabled) {
-          e.currentTarget.style.borderColor = color
-          e.currentTarget.style.boxShadow = `0 0 0 3px ${color}22`
-        }
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.borderColor = 'hsl(var(--border))'
-        e.currentTarget.style.boxShadow = 'none'
-      }}
-    >
-      <span style={{ color, display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.82rem', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-        {loading ? <Loader2 size={14} className="animate-spin" /> : icon}
-        {label}
-      </span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.83rem', color: 'hsl(var(--muted-foreground))' }}>
-        <FileDown size={13} />
-        {loading ? 'Generating…' : 'Download .xlsx'}
-      </span>
-    </button>
-  )
-}
-
-function StatCard({ label, value, icon, highlight }: { label: string; value: number; icon: React.ReactNode; highlight?: boolean }) {
-  return (
-    <div className={`rounded-lg p-4 ${highlight ? 'bg-primary/10 border border-primary/20' : 'bg-muted'}`}>
-      <div className={`mb-2 ${highlight ? 'text-primary' : 'text-muted-foreground'}`}>{icon}</div>
-      <p className={`text-2xl font-bold ${highlight ? 'text-primary' : ''}`}>{value}</p>
-      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
     </div>
   )
 }

@@ -123,6 +123,8 @@ function buildSheet(data: ReportData, projectType: ProjectType): XLSX.WorkSheet 
     .filter((g) => g.project_type === projectType)
     .sort((a, b) => a.name.localeCompare(b.name))
 
+  const generatedDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
+
   const headers: string[] = [
     'Group',
     'Project Title',
@@ -139,7 +141,14 @@ function buildSheet(data: ReportData, projectType: ProjectType): XLSX.WorkSheet 
     'Group Comments',
   ]
 
-  const aoa: (string | number)[][] = [headers]
+  // Metadata title block (3 rows) + blank row before data header
+  const aoa: (string | number | null)[][] = [
+    ['Amrita Vishwa Vidyapeetham — Data Science TAG Panel Review', ...Array(headers.length - 1).fill(null)],
+    [`Project Type: ${capitalize(projectType)} Based`, ...Array(headers.length - 1).fill(null)],
+    [`Generated: ${generatedDate}`, ...Array(headers.length - 1).fill(null)],
+    Array(headers.length).fill(null),
+    headers,
+  ]
 
   for (const group of typeGroups) {
     const groupStudents = students
@@ -175,7 +184,8 @@ function buildSheet(data: ReportData, projectType: ProjectType): XLSX.WorkSheet 
 
   const ws = XLSX.utils.aoa_to_sheet(aoa)
 
-  ws['!freeze'] = { xSplit: 0, ySplit: 1, topLeftCell: 'A2', activePane: 'bottomLeft', state: 'frozen' }
+  // Freeze past the 4 metadata rows + 1 header row (row 5 is the column header)
+  ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomLeft', state: 'frozen' }
   ws['!cols'] = [
     { wch: 14 },  // Group
     { wch: 32 },  // Project Title
