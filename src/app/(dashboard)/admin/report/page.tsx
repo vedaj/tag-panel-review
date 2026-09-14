@@ -92,12 +92,14 @@ export default function ReportPage() {
     }
   }
 
-  async function handleResetGrades() {
+  async function handleResetGrades(clearType = false) {
     setResetting(true)
     try {
       await supabase.from('grades').delete().neq('id', '00000000-0000-0000-0000-000000000000')
       await supabase.from('feedback').delete().neq('id', '00000000-0000-0000-0000-000000000000')
-      await supabase.from('groups').update({ project_type: null }).neq('id', '00000000-0000-0000-0000-000000000000')
+      if (clearType) {
+        await supabase.from('groups').update({ project_type: null }).neq('id', '00000000-0000-0000-0000-000000000000')
+      }
       setConfirmReset(false)
       if (stats) setStats({ ...stats, grades: [] })
     } finally {
@@ -341,7 +343,7 @@ export default function ReportPage() {
             {!confirmReset ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                 <p style={{ margin: 0, fontSize: '0.84rem', color: 'hsl(var(--muted-foreground))' }}>
-                  Permanently deletes all grade entries and feedback comments for every student, and clears the project type on every group. This cannot be undone.
+                  Permanently deletes all grade entries and feedback for every student across all faculty. Optionally also clears the project type assigned to each group. Cannot be undone.
                 </p>
                 <Button variant="destructive" className="gap-2" onClick={() => setConfirmReset(true)} style={{ flexShrink: 0 }}>
                   <Trash2 size={14} />Reset All Grades
@@ -352,12 +354,16 @@ export default function ReportPage() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px', borderRadius: 'calc(var(--radius) * 1.2)', background: '#fff5f5', border: '1px solid #fecaca' }}>
                   <AlertTriangle size={15} style={{ color: '#dc2626', marginTop: 1, flexShrink: 0 }} />
                   <p style={{ margin: 0, fontSize: '0.84rem', color: '#7f1d1d' }}>
-                    This will delete <strong>all grades and feedback</strong> for every student and group, and <strong>clear the project type</strong> on every group. Are you absolutely sure?
+                    Choose what to reset. All grades and feedback for every faculty member will be deleted and the graded/ungraded counts will be cleared. This cannot be undone.
                   </p>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <Button variant="destructive" className="gap-2" onClick={handleResetGrades} disabled={resetting}>
-                    {resetting ? <><Loader2 size={14} className="animate-spin" />Deleting…</> : <>Yes, delete everything</>}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  <Button variant="destructive" className="gap-2" onClick={() => handleResetGrades(false)} disabled={resetting}>
+                    {resetting ? <><Loader2 size={14} className="animate-spin" />Resetting…</> : <>Reset marks only</>}
+                  </Button>
+                  <Button variant="destructive" className="gap-2" onClick={() => handleResetGrades(true)} disabled={resetting}
+                    style={{ opacity: resetting ? 0.6 : 1, background: '#7f1d1d' }}>
+                    {resetting ? <><Loader2 size={14} className="animate-spin" />Resetting…</> : <>Reset marks &amp; project types</>}
                   </Button>
                   <Button variant="outline" onClick={() => setConfirmReset(false)} disabled={resetting}>
                     Cancel
