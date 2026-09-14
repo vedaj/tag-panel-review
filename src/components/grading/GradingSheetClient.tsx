@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import {
   ArrowLeft, Save, Users, MessageSquare, CheckCircle2, Loader2, Info, X,
-  FlaskConical, Smartphone, Code2, Trash2, AlertTriangle,
+  FlaskConical, Smartphone, Code2, Trash2, AlertTriangle, Lock,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -20,6 +20,7 @@ interface Props {
   existingGrades: Grade[]
   existingFeedback: Feedback[]
   facultyId: string
+  isAdmin: boolean
 }
 
 const PROJECT_TYPES: { value: ProjectType; label: string; description: string; Icon: React.ElementType }[] = [
@@ -44,7 +45,7 @@ function toTitleCase(name: string) {
   return name.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')
 }
 
-export function GradingSheetClient({ group, criteria, existingGrades, existingFeedback, facultyId }: Props) {
+export function GradingSheetClient({ group, criteria, existingGrades, existingFeedback, facultyId, isAdmin }: Props) {
   const supabase = createClient()
   const router = useRouter()
 
@@ -223,7 +224,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
   const maxTotal = maxMarks()
   const selectedTypeInfo = PROJECT_TYPES.find((t) => t.value === projectType)
 
-  // ── Project type selector ────────────────────────────────────────────────
+  // ── Project type gate ────────────────────────────────────────────────────
   if (!projectType) {
     return (
       <div className="min-h-screen bg-background md:pt-0 pt-14 flex items-start justify-center">
@@ -235,53 +236,81 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
             <h1 className="text-2xl font-bold">{group.name}</h1>
             {group.project_title && <p className="text-muted-foreground mt-1">{group.project_title}</p>}
           </div>
-          <div style={{
-            padding: '24px',
-            border: '1px solid var(--app-panel-border)',
-            borderRadius: '20px',
-            background: 'linear-gradient(180deg, var(--app-panel-strong), var(--app-panel))',
-          }}>
-            <p className="eyebrow mb-2">Step 1</p>
-            <h2 style={{ margin: '0 0 4px', fontFamily: 'var(--title-font)', fontSize: '1.4rem', letterSpacing: '-0.03em', color: 'var(--app-hero-text)' }}>
-              Select Project Type
-            </h2>
-            <p style={{ color: 'var(--app-hero-subtext)', fontSize: '0.88rem', marginBottom: '20px' }}>
-              Choose the category that best describes this group&apos;s project. This determines which rubric criteria are shown.
-            </p>
-            <div style={{ display: 'grid', gap: '12px' }}>
-              {PROJECT_TYPES.map(({ value, label, description, Icon }) => (
-                <button
-                  key={value}
-                  disabled={settingType}
-                  onClick={() => selectProjectType(value)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '16px',
-                    padding: '16px 20px', borderRadius: '14px',
-                    border: '1px solid var(--app-panel-border)',
-                    background: 'var(--app-panel-strong)',
-                    cursor: settingType ? 'wait' : 'pointer',
-                    textAlign: 'left',
-                    transition: 'border-color 140ms ease, transform 140ms ease',
-                  }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'hsl(var(--primary))'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)' }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--app-panel-border)'; (e.currentTarget as HTMLButtonElement).style.transform = 'none' }}
-                >
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    width: 44, height: 44, borderRadius: '12px',
-                    background: 'var(--app-accent-soft)', color: 'var(--app-kicker)',
-                    flexShrink: 0,
-                  }}>
-                    <Icon size={20} />
-                  </span>
-                  <span>
-                    <span style={{ display: 'block', fontWeight: 600, color: 'var(--app-hero-text)' }}>{label}</span>
-                    <span style={{ display: 'block', fontSize: '0.82rem', color: 'var(--app-hero-subtext)', marginTop: 2 }}>{description}</span>
-                  </span>
-                </button>
-              ))}
+
+          {isAdmin ? (
+            /* Admin: show the type selector */
+            <div style={{
+              padding: '24px',
+              border: '1px solid var(--app-panel-border)',
+              borderRadius: '20px',
+              background: 'linear-gradient(180deg, var(--app-panel-strong), var(--app-panel))',
+            }}>
+              <p className="eyebrow mb-2">Step 1</p>
+              <h2 style={{ margin: '0 0 4px', fontFamily: 'var(--title-font)', fontSize: '1.4rem', letterSpacing: '-0.03em', color: 'var(--app-hero-text)' }}>
+                Select Project Type
+              </h2>
+              <p style={{ color: 'var(--app-hero-subtext)', fontSize: '0.88rem', marginBottom: '20px' }}>
+                Choose the category that best describes this group&apos;s project. This determines which rubric criteria are shown.
+              </p>
+              <div style={{ display: 'grid', gap: '12px' }}>
+                {PROJECT_TYPES.map(({ value, label, description, Icon }) => (
+                  <button
+                    key={value}
+                    disabled={settingType}
+                    onClick={() => selectProjectType(value)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '16px',
+                      padding: '16px 20px', borderRadius: '14px',
+                      border: '1px solid var(--app-panel-border)',
+                      background: 'var(--app-panel-strong)',
+                      cursor: settingType ? 'wait' : 'pointer',
+                      textAlign: 'left',
+                      transition: 'border-color 140ms ease, transform 140ms ease',
+                    }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'hsl(var(--primary))'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)' }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--app-panel-border)'; (e.currentTarget as HTMLButtonElement).style.transform = 'none' }}
+                  >
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                      width: 44, height: 44, borderRadius: '12px',
+                      background: 'var(--app-accent-soft)', color: 'var(--app-kicker)',
+                      flexShrink: 0,
+                    }}>
+                      <Icon size={20} />
+                    </span>
+                    <span>
+                      <span style={{ display: 'block', fontWeight: 600, color: 'var(--app-hero-text)' }}>{label}</span>
+                      <span style={{ display: 'block', fontSize: '0.82rem', color: 'var(--app-hero-subtext)', marginTop: 2 }}>{description}</span>
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            /* Non-admin: inform and block */
+            <div style={{
+              padding: '32px 28px',
+              border: '1px solid var(--app-panel-border)',
+              borderRadius: '20px',
+              background: 'linear-gradient(180deg, var(--app-panel-strong), var(--app-panel))',
+              textAlign: 'center',
+            }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 52, height: 52, borderRadius: '14px',
+                background: 'var(--app-accent-soft)', color: 'var(--app-kicker)',
+                marginBottom: 16,
+              }}>
+                <Lock size={22} />
+              </span>
+              <h2 style={{ margin: '0 0 8px', fontFamily: 'var(--title-font)', fontSize: '1.3rem', letterSpacing: '-0.03em', color: 'var(--app-hero-text)' }}>
+                Project Type Not Set
+              </h2>
+              <p style={{ color: 'var(--app-hero-subtext)', fontSize: '0.9rem', lineHeight: 1.6, maxWidth: 360, margin: '0 auto' }}>
+                The project type for <strong>{group.name}</strong> hasn&apos;t been set yet. Please ask your admin to assign a project type before you can begin grading.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     )

@@ -75,6 +75,7 @@ export default async function GradePage({ params }: Props) {
       existingGrades={existingGrades ?? []}
       existingFeedback={existingFeedback ?? []}
       facultyId={user.id}
+      isAdmin={profile?.role === 'admin'}
     />
   )
 }
