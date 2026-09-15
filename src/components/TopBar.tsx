@@ -1,9 +1,12 @@
 'use client'
 import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { PanelLeftClose, PanelLeftOpen, Menu, LogOut, GraduationCap } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, Menu, LogOut, GraduationCap, Sun, Moon } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
 import type { Profile } from '@/types/database'
+
+type Theme = 'light' | 'dark'
+type FontMode = 'serif' | 'sans'
 
 export function TopBar({
   profile,
@@ -17,9 +20,21 @@ export function TopBar({
   onMobileToggle: () => void
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const [theme, setTheme] = useState<Theme>('light')
+  const [fontMode, setFontMode] = useState<FontMode>('serif')
   const menuRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = createClient()
+
+  useEffect(() => {
+    // Sync state from what the anti-flash script already applied
+    try {
+      const t = localStorage.getItem('tag:theme') as Theme | null
+      const f = localStorage.getItem('tag:font') as FontMode | null
+      if (t) setTheme(t)
+      if (f) setFontMode(f)
+    } catch {}
+  }, [])
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -30,6 +45,18 @@ export function TopBar({
     document.addEventListener('mousedown', onClickOutside)
     return () => document.removeEventListener('mousedown', onClickOutside)
   }, [])
+
+  function applyTheme(t: Theme) {
+    setTheme(t)
+    try { localStorage.setItem('tag:theme', t) } catch {}
+    document.documentElement.classList.toggle('dark', t === 'dark')
+  }
+
+  function applyFont(f: FontMode) {
+    setFontMode(f)
+    try { localStorage.setItem('tag:font', f) } catch {}
+    document.documentElement.classList.toggle('font-sans-ui', f === 'sans')
+  }
 
   async function handleSignOut() {
     setMenuOpen(false)
@@ -80,6 +107,7 @@ export function TopBar({
 
         {menuOpen && (
           <div className="user-menu-dropdown">
+            {/* Profile header */}
             <div className="user-menu-header">
               <span className="user-avatar-ring user-avatar-ring-lg">
                 <span className="user-avatar-initials user-avatar-initials-lg">{initials}</span>
@@ -89,7 +117,57 @@ export function TopBar({
                 <p className="user-menu-badge">{profile?.role}</p>
               </div>
             </div>
+
             <div className="user-menu-divider" />
+
+            {/* Preferences */}
+            <div className="user-menu-pref-section">
+              {/* Theme */}
+              <div className="user-menu-pref-row">
+                <span className="user-menu-pref-label">Theme</span>
+                <div className="user-menu-pref-control">
+                  <button
+                    className={`pref-btn${theme === 'light' ? ' pref-btn-active' : ''}`}
+                    onClick={() => applyTheme('light')}
+                    title="Light"
+                  >
+                    <Sun size={13} />
+                  </button>
+                  <button
+                    className={`pref-btn${theme === 'dark' ? ' pref-btn-active' : ''}`}
+                    onClick={() => applyTheme('dark')}
+                    title="Dark"
+                  >
+                    <Moon size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Font */}
+              <div className="user-menu-pref-row">
+                <span className="user-menu-pref-label">Font</span>
+                <div className="user-menu-pref-control">
+                  <button
+                    className={`pref-btn pref-btn-serif${fontMode === 'serif' ? ' pref-btn-active' : ''}`}
+                    onClick={() => applyFont('serif')}
+                    title="Serif"
+                  >
+                    Aa
+                  </button>
+                  <button
+                    className={`pref-btn pref-btn-sans${fontMode === 'sans' ? ' pref-btn-active' : ''}`}
+                    onClick={() => applyFont('sans')}
+                    title="Sans-serif"
+                  >
+                    Aa
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="user-menu-divider" />
+
+            {/* Sign out */}
             <div className="user-menu-actions">
               <button className="user-menu-item" onClick={handleSignOut}>
                 <LogOut size={14} />
