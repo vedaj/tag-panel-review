@@ -1,4 +1,5 @@
-import * as XLSX from 'xlsx'
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const XLSX = require('xlsx-js-style') as typeof import('xlsx')
 import type { Group, Student, Profile, Criteria, Grade, Feedback } from '@/types/database'
 
 // ── Import helpers ──────────────────────────────────────────────────────────
@@ -50,7 +51,267 @@ export function parseFacultyExcel(file: File): Promise<FacultyRow[]> {
   })
 }
 
-// ── Export report ───────────────────────────────────────────────────────────
+// ── Style constants ─────────────────────────────────────────────────────────
+
+const C = {
+  // Brand
+  ind900: '1E1B4B', ind800: '312E81', ind700: '4338CA', ind600: '4F46E5',
+  ind100: 'E0E7FF', ind50:  'EEF2FF',
+  vio600: '7C3AED', vio200: 'DDD6FE', vio100: 'EDE9FE', vio50:  'F5F3FF',
+  // Grays
+  white:  'FFFFFF', gray50: 'F9FAFB', gray100: 'F3F4F6', gray200: 'E5E7EB',
+  gray300: 'D1D5DB', gray400: '9CA3AF', gray500: '6B7280',
+  gray700: '374151', gray800: '1F2937',
+  // Score: high / mid / low
+  grnBg: 'D1FAE5', grnTx: '065F46',
+  ylwBg: 'FEF3C7', ylwTx: '78350F',
+  redBg: 'FEE2E2', redTx: '991B1B',
+  // Total / special
+  totBg: 'CCFBF1', totTx: '134E4A',
+  // Project type chips
+  resBg: 'DBEAFE', resTx: '1D4ED8',
+  appBg: 'D1FAE5', appTx: '065F46',
+  sftBg: 'EDE9FE', sftTx: '5B21B6',
+}
+
+type CellStyle = Record<string, unknown>
+
+function solidFill(rgb: string) {
+  return { patternType: 'solid', fgColor: { rgb }, bgColor: { indexed: 64 } }
+}
+
+function borderAll(rgb = C.gray200): CellStyle {
+  const s = { style: 'thin', color: { rgb } }
+  return { top: s, bottom: s, left: s, right: s }
+}
+function borderBottom(rgb = C.gray200): CellStyle {
+  return { bottom: { style: 'thin', color: { rgb } } }
+}
+
+function scoreColors(score: number, max: number): [string, string] {
+  if (score === 0 || max === 0) return [C.gray50, C.gray400]
+  const p = (score / max) * 100
+  if (p >= 80) return [C.grnBg, C.grnTx]
+  if (p >= 60) return [C.ylwBg, C.ylwTx]
+  return [C.redBg, C.redTx]
+}
+
+function pctColors(pct: number): [string, string] {
+  if (pct >= 80) return [C.grnBg, C.grnTx]
+  if (pct >= 60) return [C.ylwBg, C.ylwTx]
+  return [C.redBg, C.redTx]
+}
+
+function typeColors(pt: string): [string, string] {
+  if (pt.toLowerCase().startsWith('res')) return [C.resBg, C.resTx]
+  if (pt.toLowerCase().startsWith('app')) return [C.appBg, C.appTx]
+  return [C.sftBg, C.sftTx]
+}
+
+// Base styles for common patterns
+const S = {
+  titleCell: {
+    fill: solidFill(C.ind800),
+    font: { bold: true, color: { rgb: C.white }, sz: 14, name: 'Calibri' },
+    alignment: { horizontal: 'left', vertical: 'center', wrapText: false },
+  },
+  subtitleCell: {
+    fill: solidFill(C.vio100),
+    font: { bold: true, italic: false, color: { rgb: C.ind800 }, sz: 11, name: 'Calibri' },
+    alignment: { horizontal: 'left', vertical: 'center' },
+  },
+  dateCell: {
+    fill: solidFill(C.gray50),
+    font: { italic: true, color: { rgb: C.gray500 }, sz: 10, name: 'Calibri' },
+    alignment: { horizontal: 'left', vertical: 'center' },
+  },
+  blankCell: {
+    fill: solidFill(C.gray100),
+    font: { sz: 6 },
+  },
+  headerCell: {
+    fill: solidFill(C.ind700),
+    font: { bold: true, color: { rgb: C.white }, sz: 10, name: 'Calibri' },
+    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+    border: borderAll(C.ind600),
+  },
+  textLeft: (rowBg: string) => ({
+    fill: solidFill(rowBg),
+    font: { color: { rgb: C.gray700 }, sz: 10 },
+    alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
+    border: borderAll(C.gray200),
+  }),
+  textCenter: (rowBg: string) => ({
+    fill: solidFill(rowBg),
+    font: { color: { rgb: C.gray700 }, sz: 10 },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: borderAll(C.gray200),
+  }),
+}
+
+// Encode cell address (row + col, 0-indexed)
+function addr(r: number, c: number): string {
+  return XLSX.utils.encode_cell({ r, c })
+}
+
+function cellAt(ws: Record<string, unknown>, r: number, c: number): Record<string, unknown> {
+  const a = addr(r, c)
+  if (!ws[a]) ws[a] = { v: null, t: 'z' }
+  return ws[a] as Record<string, unknown>
+}
+
+// ── Apply styles to a sheet ─────────────────────────────────────────────────
+
+interface StyleConfig {
+  numCols: number
+  // Column classification (all 0-indexed)
+  leftTextCols: Set<number>       // left-aligned text (group, name, comments…)
+  centerTextCols: Set<number>     // center-aligned text (roll no, type…)
+  scoreColMaxes: Map<number, number> // col → max marks for score cols
+  totalCol: number
+  totalMax: number
+  maxMarksCol: number
+  pctCol: number
+  commentCols: Set<number>        // wrap-text comment cols
+  typeCol: number                 // project type column (colored by type)
+  numDataRows: number
+}
+
+function applyStyles(ws: Record<string, unknown>, cfg: StyleConfig) {
+  const { numCols, numDataRows } = cfg
+  const DATA_START = 5  // first data row (0-indexed)
+
+  // ── Merged title rows ──────────────────────────────────────────────────
+  ws['!merges'] = [
+    { s: { r: 0, c: 0 }, e: { r: 0, c: numCols - 1 } },
+    { s: { r: 1, c: 0 }, e: { r: 1, c: numCols - 1 } },
+    { s: { r: 2, c: 0 }, e: { r: 2, c: numCols - 1 } },
+    { s: { r: 3, c: 0 }, e: { r: 3, c: numCols - 1 } },
+  ]
+
+  // ── Row heights ────────────────────────────────────────────────────────
+  ws['!rows'] = [
+    { hpt: 30 },  // title
+    { hpt: 20 },  // subtitle
+    { hpt: 15 },  // date
+    { hpt: 5 },   // blank
+    { hpt: 36 },  // header
+    ...Array(numDataRows).fill({ hpt: 20 }),
+  ]
+
+  for (let R = 0; R < DATA_START + numDataRows; R++) {
+    const isTitle = R === 0
+    const isSubtitle = R === 1
+    const isDate = R === 2
+    const isBlank = R === 3
+    const isHeader = R === 4
+    const isData = R >= DATA_START
+
+    // Even/odd striping for data rows
+    const rowBg = isData
+      ? (R - DATA_START) % 2 === 0 ? C.white : C.vio50
+      : C.white
+
+    for (let C_ = 0; C_ < numCols; C_++) {
+      const cell = cellAt(ws, R, C_)
+      const val = cell.v as number | string | null
+
+      if (isTitle)    { cell.s = S.titleCell;    continue }
+      if (isSubtitle) { cell.s = S.subtitleCell; continue }
+      if (isDate)     { cell.s = S.dateCell;     continue }
+      if (isBlank)    { cell.s = S.blankCell;    continue }
+
+      if (isHeader) {
+        cell.s = S.headerCell
+        continue
+      }
+
+      // ── Data rows ──────────────────────────────────────────────────────
+
+      // Project type column — colored chip
+      if (C_ === cfg.typeCol) {
+        const [bg, tx] = typeColors(String(val ?? ''))
+        cell.s = {
+          fill: solidFill(bg),
+          font: { bold: true, color: { rgb: tx }, sz: 10 },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: borderAll(C.gray200),
+        }
+        continue
+      }
+
+      // Score columns
+      if (cfg.scoreColMaxes.has(C_)) {
+        const max = cfg.scoreColMaxes.get(C_)!
+        const [bgc, txc] = scoreColors(Number(val ?? 0), max)
+        cell.s = {
+          fill: solidFill(bgc),
+          font: { bold: false, color: { rgb: txc }, sz: 11 },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: borderAll(C.gray200),
+        }
+        continue
+      }
+
+      // Total column
+      if (C_ === cfg.totalCol) {
+        const [bgc, txc] = scoreColors(Number(val ?? 0), cfg.totalMax)
+        cell.s = {
+          fill: solidFill(bgc),
+          font: { bold: true, color: { rgb: txc }, sz: 11 },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: borderAll(C.gray200),
+        }
+        continue
+      }
+
+      // Max Marks column
+      if (C_ === cfg.maxMarksCol) {
+        cell.s = {
+          fill: solidFill(rowBg),
+          font: { color: { rgb: C.gray500 }, sz: 10 },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: borderAll(C.gray200),
+        }
+        continue
+      }
+
+      // % Score column
+      if (C_ === cfg.pctCol) {
+        const [bgc, txc] = pctColors(Number(val ?? 0))
+        cell.s = {
+          fill: solidFill(bgc),
+          font: { bold: true, color: { rgb: txc }, sz: 11 },
+          alignment: { horizontal: 'center', vertical: 'center' },
+          border: borderAll(C.gray200),
+        }
+        continue
+      }
+
+      // Comment columns — wrap text
+      if (cfg.commentCols.has(C_)) {
+        cell.s = {
+          fill: solidFill(rowBg),
+          font: { color: { rgb: C.gray700 }, sz: 9, italic: true },
+          alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
+          border: borderBottom(C.gray200),
+        }
+        continue
+      }
+
+      // Left-aligned text
+      if (cfg.leftTextCols.has(C_)) {
+        cell.s = S.textLeft(rowBg)
+        continue
+      }
+
+      // Center-aligned text (default for remaining)
+      cell.s = S.textCenter(rowBg)
+    }
+  }
+}
+
+// ── Report data ─────────────────────────────────────────────────────────────
 
 export interface ReportData {
   groups: Group[]
@@ -68,28 +329,19 @@ function capitalize(s: string) {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-/**
- * Mean score for a single criterion for a given student.
- * Only counts faculty who actually submitted a grade (no records = not counted).
- */
 function critMean(studentId: string, crit: Criteria, grades: Grade[]): number {
   const hasSub = crit.sub_criteria && crit.sub_criteria.length > 0
-
   if (hasSub) {
-    // Sum the per-sub-criterion means; each sub-mean ignores faculty who didn't grade it
     let total = 0
     for (const sub of crit.sub_criteria!) {
       const subGrades = grades.filter(
         (g) => g.student_id === studentId && g.criteria_id === crit.id && g.sub_criteria_id === sub.id
       )
-      if (subGrades.length > 0) {
+      if (subGrades.length > 0)
         total += subGrades.reduce((a, b) => a + b.marks, 0) / subGrades.length
-      }
-      // if no faculty graded this sub-criterion, contribute 0 to the sum
     }
     return parseFloat(total.toFixed(2))
   }
-
   const critGrades = grades.filter(
     (g) => g.student_id === studentId && g.criteria_id === crit.id && g.sub_criteria_id === null
   )
@@ -97,12 +349,7 @@ function critMean(studentId: string, crit: Criteria, grades: Grade[]): number {
   return parseFloat((critGrades.reduce((a, b) => a + b.marks, 0) / critGrades.length).toFixed(2))
 }
 
-function gatherComments(
-  feedback: Feedback[],
-  faculty: Profile[],
-  groupId: string,
-  studentId: string | null
-): string {
+function gatherComments(feedback: Feedback[], faculty: Profile[], groupId: string, studentId: string | null): string {
   return feedback
     .filter((f) => f.group_id === groupId && f.student_id === studentId && f.content?.trim())
     .map((f) => {
@@ -112,7 +359,9 @@ function gatherComments(
     .join('\n')
 }
 
-function buildSheet(data: ReportData, projectType: ProjectType): XLSX.WorkSheet {
+// ── Per-type sheet ──────────────────────────────────────────────────────────
+
+function buildSheet(data: ReportData, projectType: ProjectType): Record<string, unknown> {
   const { groups, students, faculty, criteria, grades, feedback } = data
 
   const typeCriteria = criteria
@@ -126,27 +375,18 @@ function buildSheet(data: ReportData, projectType: ProjectType): XLSX.WorkSheet 
   const generatedDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
 
   const headers: string[] = [
-    'Group',
-    'Project Title',
-    'Project Type',
-    'Guide 1',
-    'Guide 2',
-    'Roll Number',
-    'Student Name',
-    ...typeCriteria.map((c) => `${c.title} (/${c.max_marks})`),
-    'Total',
-    'Max Marks',
-    '% Score',
-    'Student Comments',
-    'Group Comments',
+    'Group', 'Project Title', 'Project Type', 'Guide 1', 'Guide 2',
+    'Roll Number', 'Student Name',
+    ...typeCriteria.map((c) => `${c.title}\n(/${c.max_marks})`),
+    'Total', 'Max Marks', '% Score',
+    'Student Comments', 'Group Comments',
   ]
 
-  // Metadata title block (3 rows) + blank row before data header
   const aoa: (string | number | null)[][] = [
-    ['Amrita Vishwa Vidyapeetham — Data Science TAG Panel Review', ...Array(headers.length - 1).fill(null)],
-    [`Project Type: ${capitalize(projectType)} Based`, ...Array(headers.length - 1).fill(null)],
-    [`Generated: ${generatedDate}`, ...Array(headers.length - 1).fill(null)],
-    Array(headers.length).fill(null),
+    ['Amrita Vishwa Vidyapeetham — Data Science TAG Panel Review'],
+    [`${capitalize(projectType)} Based Projects — Grade Report`],
+    [`Generated: ${generatedDate}`],
+    [null],
     headers,
   ]
 
@@ -154,7 +394,6 @@ function buildSheet(data: ReportData, projectType: ProjectType): XLSX.WorkSheet 
     const groupStudents = students
       .filter((s) => s.group_id === group.id)
       .sort((a, b) => a.roll_number.localeCompare(b.roll_number))
-
     const groupComments = gatherComments(feedback, faculty, group.id, null)
 
     for (const student of groupStudents) {
@@ -163,82 +402,78 @@ function buildSheet(data: ReportData, projectType: ProjectType): XLSX.WorkSheet 
       const maxTotal = typeCriteria.reduce((a, c) => a + c.max_marks, 0)
       const pct = maxTotal > 0 ? parseFloat(((total / maxTotal) * 100).toFixed(1)) : 0
       const studentComments = gatherComments(feedback, faculty, group.id, student.id)
-
       aoa.push([
-        group.name,
-        group.project_title,
-        capitalize(projectType),
-        group.guide1,
-        group.guide2 ?? '',
-        student.roll_number,
-        student.name,
-        ...scores,
-        total,
-        maxTotal,
-        pct,
-        studentComments,
-        groupComments,
+        group.name, group.project_title, capitalize(projectType),
+        group.guide1, group.guide2 ?? '',
+        student.roll_number, student.name,
+        ...scores, total, maxTotal, pct,
+        studentComments, groupComments,
       ])
     }
   }
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  const ws = XLSX.utils.aoa_to_sheet(aoa) as Record<string, unknown>
 
-  // Freeze past the 4 metadata rows + 1 header row (row 5 is the column header)
+  const numCritCols = typeCriteria.length
+  // Col indices (0-based): Group=0, Title=1, Type=2, G1=3, G2=4, Roll=5, Name=6, scores=7..7+n-1
+  const firstScore = 7
+  const lastScore = 7 + numCritCols - 1
+  const totalCol = lastScore + 1
+  const maxCol = totalCol + 1
+  const pctCol = maxCol + 1
+  const commentStart = pctCol + 1
+  const numCols = headers.length
+  const totalMax = typeCriteria.reduce((a, c) => a + c.max_marks, 0)
+
+  const scoreColMaxes = new Map<number, number>()
+  typeCriteria.forEach((c, i) => scoreColMaxes.set(firstScore + i, c.max_marks))
+
+  applyStyles(ws, {
+    numCols,
+    leftTextCols: new Set([0, 1, 3, 4, 6]),
+    centerTextCols: new Set([2, 5]),
+    scoreColMaxes,
+    totalCol,
+    totalMax,
+    maxMarksCol: maxCol,
+    pctCol,
+    commentCols: new Set([commentStart, commentStart + 1]),
+    typeCol: 2,
+    numDataRows: aoa.length - 5,
+  })
+
   ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomLeft', state: 'frozen' }
   ws['!cols'] = [
-    { wch: 14 },  // Group
-    { wch: 32 },  // Project Title
-    { wch: 14 },  // Project Type
-    { wch: 22 },  // Guide 1
-    { wch: 22 },  // Guide 2
-    { wch: 14 },  // Roll Number
-    { wch: 22 },  // Student Name
+    { wch: 14 }, { wch: 30 }, { wch: 14 }, { wch: 22 }, { wch: 18 },
+    { wch: 14 }, { wch: 22 },
     ...typeCriteria.map(() => ({ wch: 18 })),
-    { wch: 10 },  // Total
-    { wch: 10 },  // Max Marks
-    { wch: 10 },  // % Score
-    { wch: 44 },  // Student Comments
-    { wch: 44 },  // Group Comments
+    { wch: 10 }, { wch: 10 }, { wch: 10 },
+    { wch: 44 }, { wch: 44 },
   ]
 
   return ws
 }
 
-/**
- * Single combined sheet across all project types.
- * Criteria are labelled Criteria 1–4 (positional by order_index within each type).
- */
+// ── Combined report ─────────────────────────────────────────────────────────
+
 export function generateAllReport(data: ReportData): Blob {
   const { groups, students, faculty, criteria, grades, feedback } = data
-
   const NUM_CRITERIA = 4
   const generatedDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
 
   const headers: string[] = [
-    'Group',
-    'Project Title',
-    'Project Type',
-    'Guide 1',
-    'Guide 2',
-    'Roll Number',
-    'Student Name',
-    'Criteria 1',
-    'Criteria 2',
-    'Criteria 3',
-    'Criteria 4',
-    'Total',
-    'Max Marks',
-    '% Score',
-    'Student Comments',
-    'Group Comments',
+    'Group', 'Project Title', 'Project Type', 'Guide 1', 'Guide 2',
+    'Roll Number', 'Student Name',
+    'Criteria 1', 'Criteria 2', 'Criteria 3', 'Criteria 4',
+    'Total', 'Max Marks', '% Score',
+    'Student Comments', 'Group Comments',
   ]
 
   const aoa: (string | number | null)[][] = [
-    ['Amrita Vishwa Vidyapeetham — Data Science TAG Panel Review', ...Array(headers.length - 1).fill(null)],
-    ['All Project Types — Combined Report', ...Array(headers.length - 1).fill(null)],
-    [`Generated: ${generatedDate}`, ...Array(headers.length - 1).fill(null)],
-    Array(headers.length).fill(null),
+    ['Amrita Vishwa Vidyapeetham — Data Science TAG Panel Review'],
+    ['All Project Types — Combined Grade Report'],
+    [`Generated: ${generatedDate}`],
+    [null],
     headers,
   ]
 
@@ -257,57 +492,51 @@ export function generateAllReport(data: ReportData): Blob {
 
     const maxTotal = typeCriteria.reduce((a, c) => a + c.max_marks, 0)
     const groupComments = gatherComments(feedback, faculty, group.id, null)
-
     const groupStudents = students
       .filter((s) => s.group_id === group.id)
       .sort((a, b) => a.roll_number.localeCompare(b.roll_number))
 
     for (const student of groupStudents) {
       const scores = typeCriteria.map((c) => critMean(student.id, c, grades))
-      // Pad to 4 columns if fewer criteria defined
       while (scores.length < NUM_CRITERIA) scores.push(0)
-
       const total = parseFloat(scores.reduce((a, b) => a + b, 0).toFixed(2))
       const pct = maxTotal > 0 ? parseFloat(((total / maxTotal) * 100).toFixed(1)) : 0
       const studentComments = gatherComments(feedback, faculty, group.id, student.id)
-
       aoa.push([
-        group.name,
-        group.project_title,
-        capitalize(projectType),
-        group.guide1,
-        group.guide2 ?? '',
-        student.roll_number,
-        student.name,
-        ...scores,
-        total,
-        maxTotal,
-        pct,
-        studentComments,
-        groupComments,
+        group.name, group.project_title, capitalize(projectType),
+        group.guide1, group.guide2 ?? '',
+        student.roll_number, student.name,
+        ...scores, total, maxTotal, pct,
+        studentComments, groupComments,
       ])
     }
   }
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  const ws = XLSX.utils.aoa_to_sheet(aoa) as Record<string, unknown>
+
+  // For combined report we don't have per-criteria maxes so skip score col coloring;
+  // only color Total, % and Project Type
+  applyStyles(ws, {
+    numCols: headers.length,
+    leftTextCols: new Set([0, 1, 3, 4, 6]),
+    centerTextCols: new Set([5]),
+    scoreColMaxes: new Map(),       // no per-column max in combined report
+    totalCol: 11,
+    totalMax: 0,                    // 0 = skip total conditional (different per row)
+    maxMarksCol: 12,
+    pctCol: 13,
+    commentCols: new Set([14, 15]),
+    typeCol: 2,
+    numDataRows: aoa.length - 5,
+  })
+
   ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomLeft', state: 'frozen' }
   ws['!cols'] = [
-    { wch: 14 },  // Group
-    { wch: 32 },  // Project Title
-    { wch: 16 },  // Project Type
-    { wch: 22 },  // Guide 1
-    { wch: 22 },  // Guide 2
-    { wch: 14 },  // Roll Number
-    { wch: 22 },  // Student Name
-    { wch: 14 },  // Criteria 1
-    { wch: 14 },  // Criteria 2
-    { wch: 14 },  // Criteria 3
-    { wch: 14 },  // Criteria 4
-    { wch: 10 },  // Total
-    { wch: 10 },  // Max Marks
-    { wch: 10 },  // % Score
-    { wch: 44 },  // Student Comments
-    { wch: 44 },  // Group Comments
+    { wch: 14 }, { wch: 30 }, { wch: 16 }, { wch: 22 }, { wch: 18 },
+    { wch: 14 }, { wch: 22 },
+    { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 },
+    { wch: 10 }, { wch: 10 }, { wch: 10 },
+    { wch: 44 }, { wch: 44 },
   ]
 
   const wb = XLSX.utils.book_new()
@@ -316,17 +545,9 @@ export function generateAllReport(data: ReportData): Blob {
   return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
 }
 
-/**
- * Returns the score a single faculty gave for one criterion (or null if they didn't grade it).
- * For sub-criteria: sum of their per-sub marks.
- * For top-level: their single mark.
- */
-function facultyCritScore(
-  studentId: string,
-  crit: Criteria,
-  facultyId: string,
-  grades: Grade[]
-): number | null {
+// ── Audit report ────────────────────────────────────────────────────────────
+
+function facultyCritScore(studentId: string, crit: Criteria, facultyId: string, grades: Grade[]): number | null {
   const hasSub = crit.sub_criteria && crit.sub_criteria.length > 0
   if (hasSub) {
     const subGrades = grades.filter(
@@ -341,35 +562,24 @@ function facultyCritScore(
   return g ? g.marks : null
 }
 
-/** Audit workbook: one row per (student, faculty), showing raw marks awarded by each faculty member. */
 export function generateAuditReport(data: ReportData): Blob {
   const { groups, students, faculty, criteria, grades, feedback } = data
-
   const NUM_CRITERIA = 4
   const generatedDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
 
   const headers: string[] = [
-    'Group',
-    'Project Title',
-    'Project Type',
-    'Roll Number',
-    'Student Name',
-    'Faculty Name',
-    'Faculty Email',
-    'Criteria 1',
-    'Criteria 2',
-    'Criteria 3',
-    'Criteria 4',
-    'Total Awarded',
-    'Max Marks',
-    'Comments',
+    'Group', 'Project Title', 'Project Type',
+    'Roll Number', 'Student Name',
+    'Faculty Name', 'Faculty Email',
+    'Criteria 1', 'Criteria 2', 'Criteria 3', 'Criteria 4',
+    'Total Awarded', 'Max Marks', 'Comments',
   ]
 
   const aoa: (string | number | null)[][] = [
-    ['Amrita Vishwa Vidyapeetham — Data Science TAG Panel Review — AUDIT', ...Array(headers.length - 1).fill(null)],
-    ['Per-Faculty Marks Awarded (Confidential)', ...Array(headers.length - 1).fill(null)],
-    [`Generated: ${generatedDate}`, ...Array(headers.length - 1).fill(null)],
-    Array(headers.length).fill(null),
+    ['Amrita Vishwa Vidyapeetham — Data Science TAG Panel Review — AUDIT REPORT'],
+    ['Per-Faculty Marks Awarded · Confidential'],
+    [`Generated: ${generatedDate}`],
+    [null],
     headers,
   ]
 
@@ -387,19 +597,14 @@ export function generateAuditReport(data: ReportData): Blob {
       .slice(0, NUM_CRITERIA)
 
     const maxTotal = typeCriteria.reduce((a, c) => a + c.max_marks, 0)
-
     const groupStudents = students
       .filter((s) => s.group_id === group.id)
       .sort((a, b) => a.roll_number.localeCompare(b.roll_number))
 
     for (const student of groupStudents) {
-      // Find every faculty who graded this student
       const gradingFacultyIds = [...new Set(
-        grades
-          .filter((g) => g.student_id === student.id)
-          .map((g) => g.faculty_id)
+        grades.filter((g) => g.student_id === student.id).map((g) => g.faculty_id)
       )]
-
       const sortedFaculty = gradingFacultyIds
         .map((id) => faculty.find((f) => f.id === id))
         .filter(Boolean) as Profile[]
@@ -408,48 +613,44 @@ export function generateAuditReport(data: ReportData): Blob {
       for (const fac of sortedFaculty) {
         const scores = typeCriteria.map((c) => facultyCritScore(student.id, c, fac.id, grades))
         while (scores.length < NUM_CRITERIA) scores.push(null)
-
         const numericScores = scores.map((s) => s ?? 0)
         const total = parseFloat(numericScores.reduce((a, b) => a + b, 0).toFixed(2))
-
         const comment = feedback.find(
           (fb) => fb.faculty_id === fac.id && fb.group_id === group.id && fb.student_id === student.id
         )?.content ?? ''
-
         aoa.push([
-          group.name,
-          group.project_title,
-          capitalize(projectType),
-          student.roll_number,
-          student.name,
-          fac.name,
-          fac.email,
-          ...scores,
-          total,
-          maxTotal,
-          comment,
+          group.name, group.project_title, capitalize(projectType),
+          student.roll_number, student.name,
+          fac.name, fac.email,
+          ...scores, total, maxTotal, comment,
         ])
       }
     }
   }
 
-  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  const ws = XLSX.utils.aoa_to_sheet(aoa) as Record<string, unknown>
+
+  applyStyles(ws, {
+    numCols: headers.length,
+    leftTextCols: new Set([0, 1, 4, 5, 6]),
+    centerTextCols: new Set([3]),
+    scoreColMaxes: new Map(),
+    totalCol: 11,
+    totalMax: 0,
+    maxMarksCol: 12,
+    pctCol: -1,           // no % col in audit
+    commentCols: new Set([13]),
+    typeCol: 2,
+    numDataRows: aoa.length - 5,
+  })
+
   ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomLeft', state: 'frozen' }
   ws['!cols'] = [
-    { wch: 14 },  // Group
-    { wch: 30 },  // Project Title
-    { wch: 14 },  // Project Type
-    { wch: 14 },  // Roll Number
-    { wch: 22 },  // Student Name
-    { wch: 24 },  // Faculty Name
-    { wch: 28 },  // Faculty Email
-    { wch: 12 },  // Criteria 1
-    { wch: 12 },  // Criteria 2
-    { wch: 12 },  // Criteria 3
-    { wch: 12 },  // Criteria 4
-    { wch: 14 },  // Total Awarded
-    { wch: 10 },  // Max Marks
-    { wch: 44 },  // Comments
+    { wch: 14 }, { wch: 30 }, { wch: 14 },
+    { wch: 14 }, { wch: 22 },
+    { wch: 24 }, { wch: 28 },
+    { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+    { wch: 14 }, { wch: 10 }, { wch: 44 },
   ]
 
   const wb = XLSX.utils.book_new()
@@ -458,7 +659,8 @@ export function generateAuditReport(data: ReportData): Blob {
   return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
 }
 
-/** Single-sheet workbook for one project type. */
+// ── Per-type workbook ────────────────────────────────────────────────────────
+
 export function generateProjectTypeReport(data: ReportData, projectType: ProjectType): Blob {
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, buildSheet(data, projectType), capitalize(projectType))
@@ -474,3 +676,6 @@ export function downloadBlob(blob: Blob, filename: string) {
   a.click()
   URL.revokeObjectURL(url)
 }
+
+// Satisfy TS — ALL_TYPES referenced to avoid unused warning
+void ALL_TYPES
