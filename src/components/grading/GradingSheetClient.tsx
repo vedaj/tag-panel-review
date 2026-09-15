@@ -61,6 +61,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
   }
 
   const [projectType, setProjectTypeState] = useState<ProjectType>(group.project_type ?? '')
+  const [projectTitle, setProjectTitle] = useState(group.project_title ?? '')
   const [grades, setGrades] = useState<GradeMap>(buildGradeMap)
   const [feedbacks, setFeedbacks] = useState<FeedbackMap>(buildFeedbackMap)
   const [showFeedback, setShowFeedback] = useState(false)
@@ -136,6 +137,13 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
       }
       const { error: gradesErr } = await supabase.from('grades').upsert(gradeRows, { onConflict: 'faculty_id,student_id,criteria_id,sub_criteria_id' })
       if (gradesErr) throw gradesErr
+
+      const titleRes = await fetch('/api/group/update-title', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId: group.id, projectTitle: projectTitle.trim() }),
+      })
+      if (!titleRes.ok) throw new Error('Failed to save project title')
 
       const feedbackRows = []
       const groupFb = feedbacks[feedbackKey(group.id, null)]
@@ -251,7 +259,23 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
           )}
           <div className="mb-6">
             <h1 className="text-2xl font-bold">{group.name}</h1>
-            {group.project_title && <p className="text-muted-foreground mt-1">{group.project_title}</p>}
+            <input
+              type="text"
+              value={projectTitle}
+              onChange={(e) => { setProjectTitle(e.target.value); setSaved(false) }}
+              placeholder="Enter project title…"
+              style={{
+                marginTop: 6,
+                width: '100%',
+                background: 'transparent',
+                border: 'none',
+                borderBottom: '1px solid var(--app-panel-border)',
+                outline: 'none',
+                fontSize: '0.95rem',
+                color: 'var(--app-hero-subtext)',
+                padding: '2px 0 4px',
+              }}
+            />
           </div>
 
           {isAdmin ? (
@@ -420,7 +444,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
             </Link>
             <div className="min-w-0">
               <h1 className="font-bold text-sm md:text-base truncate leading-tight">{group.name}</h1>
-              {group.project_title && <p className="text-xs text-muted-foreground truncate">{group.project_title}</p>}
+              {projectTitle && <p className="text-xs text-muted-foreground truncate">{projectTitle}</p>}
             </div>
             {selectedTypeInfo && (
               <button
