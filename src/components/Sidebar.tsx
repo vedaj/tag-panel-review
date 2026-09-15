@@ -43,25 +43,23 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose }: SidebarPro
   const isAdmin = profile?.role === 'admin'
   const visibleItems = navItems.filter((item) => !item.adminOnly || isAdmin)
 
-  const NavLinks = ({ onNav }: { onNav?: () => void }) => (
+  const NavLinks = ({ onNav, forceOpen }: { onNav?: () => void; forceOpen?: boolean }) => (
     <div className="nav-group">
       {visibleItems.map((item) => {
         const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+        const showLabel = forceOpen ?? open
         return (
           <Link
             key={item.href}
             href={item.href}
             onClick={onNav}
             className={`nav-item${active ? ' active' : ''}`}
-            title={!open ? item.label : undefined}
+            title={!showLabel ? item.label : undefined}
           >
-            <div className="nav-item-head">
-              <span className="nav-item-icon">
-                <item.icon size={15} />
-              </span>
-              {open && <strong>{item.label}</strong>}
-            </div>
-            {open && <span className="nav-caption">{item.caption}</span>}
+            <span className="nav-item-icon">
+              <item.icon size={18} />
+            </span>
+            {showLabel && <span className="nav-label">{item.label}</span>}
           </Link>
         )
       })}
@@ -73,20 +71,20 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose }: SidebarPro
       {/* Desktop sidebar */}
       <aside className={`sidebar${open ? '' : ' sidebar-collapsed'}`}>
         {/* Brand block */}
-        <div className="brand-block" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="brand-block">
           <span style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+            width: 34, height: 34, borderRadius: 8, flexShrink: 0,
             background: 'hsl(var(--primary) / 0.12)',
             color: 'hsl(var(--primary))',
             boxShadow: '0 0 0 1px hsl(var(--primary) / 0.15)',
           }}>
-            <GraduationCap size={16} />
+            <GraduationCap size={17} />
           </span>
           {open && (
-            <div>
-              <p className="eyebrow" style={{ fontSize: '0.68rem' }}>Data Science TAG</p>
-              <h2 className="brand-mark" style={{ fontSize: '1.1rem', margin: 0 }}>TAG Panel Review</h2>
+            <div style={{ minWidth: 0 }}>
+              <h2 className="brand-mark">TAG Panel Review</h2>
+              <p className="brand-caption">Data Science TAG</p>
             </div>
           )}
         </div>
@@ -103,38 +101,38 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose }: SidebarPro
         <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex' }}>
           <div style={{
             width: 280, overflowY: 'auto',
-            background: 'linear-gradient(180deg, var(--sidebar), var(--sidebar-accent))',
-            borderRight: '1px solid var(--sidebar-border)',
-            padding: 20, display: 'grid', gap: 20, alignContent: 'start',
+            background: 'color-mix(in srgb, var(--sidebar) 96%, transparent)',
+            borderRight: '1px solid hsl(var(--border) / 0.8)',
+            backdropFilter: 'blur(20px)',
           }}>
             {/* Mobile drawer header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 32, height: 32, borderRadius: 8,
+                  width: 34, height: 34, borderRadius: 8,
                   background: 'hsl(var(--primary) / 0.12)',
                   color: 'hsl(var(--primary))',
                   boxShadow: '0 0 0 1px hsl(var(--primary) / 0.15)',
                 }}>
-                  <GraduationCap size={16} />
+                  <GraduationCap size={17} />
                 </span>
                 <div>
-                  <p className="eyebrow" style={{ fontSize: '0.68rem' }}>Data Science TAG</p>
-                  <h2 className="brand-mark" style={{ fontSize: '1.1rem', margin: 0 }}>TAG Panel Review</h2>
+                  <h2 className="brand-mark">TAG Panel Review</h2>
+                  <p className="brand-caption">Data Science TAG</p>
                 </div>
               </div>
               <button
                 onClick={onMobileClose}
-                style={{ padding: 6, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--sidebar-foreground)' }}
+                style={{ padding: 6, background: 'transparent', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <nav className="nav-section">
+            <nav style={{ padding: '4px 12px 20px' }}>
               <p className="sidebar-section-title">Navigation</p>
-              <NavLinks onNav={onMobileClose} />
+              <NavLinks onNav={onMobileClose} forceOpen />
             </nav>
           </div>
           <div style={{ flex: 1, background: 'rgba(0,0,0,0.4)' }} onClick={onMobileClose} />

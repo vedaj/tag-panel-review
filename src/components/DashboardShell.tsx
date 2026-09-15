@@ -48,7 +48,9 @@ export function DashboardShell({
           onDesktopToggle={toggleDesktop}
           onMobileToggle={() => setMobileOpen((v) => !v)}
         />
-        {children}
+        <div className="page-content">
+          {children}
+        </div>
       </div>
     </div>
   )
