@@ -114,6 +114,11 @@ const S = {
     font: { bold: true, color: { rgb: C.white }, sz: 14, name: 'Calibri' },
     alignment: { horizontal: 'left', vertical: 'center', wrapText: false },
   },
+  institutionCell: {
+    fill: solidFill(C.ind900),
+    font: { color: { rgb: C.ind100 }, sz: 10, name: 'Calibri' },
+    alignment: { horizontal: 'left', vertical: 'center' },
+  },
   subtitleCell: {
     fill: solidFill(C.vio100),
     font: { bold: true, italic: false, color: { rgb: C.ind800 }, sz: 11, name: 'Calibri' },
@@ -178,32 +183,39 @@ interface StyleConfig {
 
 function applyStyles(ws: Record<string, unknown>, cfg: StyleConfig) {
   const { numCols, numDataRows } = cfg
-  const DATA_START = 5  // first data row (0-indexed)
+  const DATA_START = 8  // first data row (0-indexed)
 
-  // ── Merged title rows ──────────────────────────────────────────────────
+  // ── Merged header rows ─────────────────────────────────────────────────
   ws['!merges'] = [
     { s: { r: 0, c: 0 }, e: { r: 0, c: numCols - 1 } },
     { s: { r: 1, c: 0 }, e: { r: 1, c: numCols - 1 } },
     { s: { r: 2, c: 0 }, e: { r: 2, c: numCols - 1 } },
     { s: { r: 3, c: 0 }, e: { r: 3, c: numCols - 1 } },
+    { s: { r: 4, c: 0 }, e: { r: 4, c: numCols - 1 } },
+    { s: { r: 5, c: 0 }, e: { r: 5, c: numCols - 1 } },
+    { s: { r: 6, c: 0 }, e: { r: 6, c: numCols - 1 } },
   ]
 
   // ── Row heights ────────────────────────────────────────────────────────
   ws['!rows'] = [
     { hpt: 30 },  // title
+    { hpt: 16 },  // institution line 1
+    { hpt: 16 },  // institution line 2
+    { hpt: 16 },  // institution line 3
     { hpt: 20 },  // subtitle
     { hpt: 15 },  // date
     { hpt: 5 },   // blank
-    { hpt: 36 },  // header
+    { hpt: 36 },  // column headers
     ...Array(numDataRows).fill({ hpt: 20 }),
   ]
 
   for (let R = 0; R < DATA_START + numDataRows; R++) {
     const isTitle = R === 0
-    const isSubtitle = R === 1
-    const isDate = R === 2
-    const isBlank = R === 3
-    const isHeader = R === 4
+    const isInstitution = R >= 1 && R <= 3
+    const isSubtitle = R === 4
+    const isDate = R === 5
+    const isBlank = R === 6
+    const isHeader = R === 7
     const isData = R >= DATA_START
 
     // Even/odd striping for data rows
@@ -215,10 +227,11 @@ function applyStyles(ws: Record<string, unknown>, cfg: StyleConfig) {
       const cell = cellAt(ws, R, C_)
       const val = cell.v as number | string | null
 
-      if (isTitle)    { cell.s = S.titleCell;    continue }
-      if (isSubtitle) { cell.s = S.subtitleCell; continue }
-      if (isDate)     { cell.s = S.dateCell;     continue }
-      if (isBlank)    { cell.s = S.blankCell;    continue }
+      if (isTitle)       { cell.s = S.titleCell;       continue }
+      if (isInstitution) { cell.s = S.institutionCell; continue }
+      if (isSubtitle)    { cell.s = S.subtitleCell;    continue }
+      if (isDate)        { cell.s = S.dateCell;        continue }
+      if (isBlank)       { cell.s = S.blankCell;       continue }
 
       if (isHeader) {
         cell.s = S.headerCell
@@ -382,7 +395,10 @@ function buildSheet(data: ReportData, projectType: ProjectType): Record<string, 
   ]
 
   const aoa: (string | number | null)[][] = [
-    ['Amrita Vishwa Vidyapeetham — Data Science TAG Panel Review'],
+    ['Panel Review - Data Science TAG'],
+    ['Department of Computer Science & Engineering'],
+    ['School of Computing'],
+    ['Amrita Vishwa Vidyapeetham, Coimbatore'],
     [`${capitalize(projectType)} Based Projects — Grade Report`],
     [`Generated: ${generatedDate}`],
     [null],
@@ -438,10 +454,10 @@ function buildSheet(data: ReportData, projectType: ProjectType): Record<string, 
     pctCol,
     commentCols: new Set([commentStart, commentStart + 1]),
     typeCol: 2,
-    numDataRows: aoa.length - 5,
+    numDataRows: aoa.length - 8,
   })
 
-  ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomLeft', state: 'frozen' }
+  ws['!freeze'] = { xSplit: 0, ySplit: 8, topLeftCell: 'A9', activePane: 'bottomLeft', state: 'frozen' }
   ws['!cols'] = [
     { wch: 14 }, { wch: 30 }, { wch: 14 }, { wch: 22 }, { wch: 18 },
     { wch: 14 }, { wch: 22 },
@@ -469,7 +485,10 @@ export function generateAllReport(data: ReportData): Blob {
   ]
 
   const aoa: (string | number | null)[][] = [
-    ['Amrita Vishwa Vidyapeetham — Data Science TAG Panel Review'],
+    ['Panel Review - Data Science TAG'],
+    ['Department of Computer Science & Engineering'],
+    ['School of Computing'],
+    ['Amrita Vishwa Vidyapeetham, Coimbatore'],
     ['All Project Types — Combined Grade Report'],
     [`Generated: ${generatedDate}`],
     [null],
@@ -526,10 +545,10 @@ export function generateAllReport(data: ReportData): Blob {
     pctCol: 13,
     commentCols: new Set([14, 15]),
     typeCol: 2,
-    numDataRows: aoa.length - 5,
+    numDataRows: aoa.length - 8,
   })
 
-  ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomLeft', state: 'frozen' }
+  ws['!freeze'] = { xSplit: 0, ySplit: 8, topLeftCell: 'A9', activePane: 'bottomLeft', state: 'frozen' }
   ws['!cols'] = [
     { wch: 14 }, { wch: 30 }, { wch: 16 }, { wch: 22 }, { wch: 18 },
     { wch: 14 }, { wch: 22 },
@@ -575,8 +594,11 @@ export function generateAuditReport(data: ReportData): Blob {
   ]
 
   const aoa: (string | number | null)[][] = [
-    ['Amrita Vishwa Vidyapeetham — Data Science TAG Panel Review — AUDIT REPORT'],
-    ['Per-Faculty Marks Awarded · Confidential'],
+    ['Panel Review - Data Science TAG'],
+    ['Department of Computer Science & Engineering'],
+    ['School of Computing'],
+    ['Amrita Vishwa Vidyapeetham, Coimbatore'],
+    ['Per-Faculty Marks Awarded — Audit Report · Confidential'],
     [`Generated: ${generatedDate}`],
     [null],
     headers,
@@ -640,10 +662,10 @@ export function generateAuditReport(data: ReportData): Blob {
     pctCol: -1,           // no % col in audit
     commentCols: new Set([13]),
     typeCol: 2,
-    numDataRows: aoa.length - 5,
+    numDataRows: aoa.length - 8,
   })
 
-  ws['!freeze'] = { xSplit: 0, ySplit: 5, topLeftCell: 'A6', activePane: 'bottomLeft', state: 'frozen' }
+  ws['!freeze'] = { xSplit: 0, ySplit: 8, topLeftCell: 'A9', activePane: 'bottomLeft', state: 'frozen' }
   ws['!cols'] = [
     { wch: 14 }, { wch: 30 }, { wch: 14 },
     { wch: 14 }, { wch: 22 },
