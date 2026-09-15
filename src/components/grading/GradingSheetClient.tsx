@@ -123,20 +123,37 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
     setSaving(true)
     setError(null)
     try {
-      const gradeRows = []
+      const studentIds = students.map((s) => s.id)
+
+      // Delete all existing grades for this faculty+group, then re-insert
+      // only non-zero rows — ensures a blank save never marks as evaluated
+      if (studentIds.length > 0) {
+        const { error: delErr } = await supabase
+          .from('grades')
+          .delete()
+          .eq('faculty_id', facultyId)
+          .in('student_id', studentIds)
+        if (delErr) throw delErr
+      }
+
+      const nonZeroRows = []
       for (const student of students) {
         for (const crit of visibleCriteria) {
           if (crit.sub_criteria.length > 0) {
             for (const sub of crit.sub_criteria) {
-              gradeRows.push({ faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: sub.id, marks: getGrade(student.id, crit.id, sub.id) })
+              const marks = getGrade(student.id, crit.id, sub.id)
+              if (marks > 0) nonZeroRows.push({ faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: sub.id, marks })
             }
           } else {
-            gradeRows.push({ faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: null, marks: getGrade(student.id, crit.id, null) })
+            const marks = getGrade(student.id, crit.id, null)
+            if (marks > 0) nonZeroRows.push({ faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: null, marks })
           }
         }
       }
-      const { error: gradesErr } = await supabase.from('grades').upsert(gradeRows, { onConflict: 'faculty_id,student_id,criteria_id,sub_criteria_id' })
-      if (gradesErr) throw gradesErr
+      if (nonZeroRows.length > 0) {
+        const { error: gradesErr } = await supabase.from('grades').insert(nonZeroRows)
+        if (gradesErr) throw gradesErr
+      }
 
       const titleRes = await fetch('/api/group/update-title', {
         method: 'POST',

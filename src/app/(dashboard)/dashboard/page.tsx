@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { ClipboardList, Users, CheckCircle2, ChevronRight } from 'lucide-react'
 
 function GroupCard({ group, gradedStudentIds }: {
-  group: { id: string; name: string; project_title?: string; guide1?: string; guide2?: string; students?: { id: string; name: string }[] }
+  group: { id: string; name: string; project_title?: string; students?: { id: string; name: string }[] }
   gradedStudentIds: Set<string>
 }) {
   const studentIds = group.students?.map((s) => s.id) ?? []
@@ -26,9 +26,6 @@ function GroupCard({ group, gradedStudentIds }: {
       <div className="group-card-meta">
         <Users size={13} />
         {total} student{total !== 1 ? 's' : ''}
-        {group.guide1 && (
-          <span style={{ marginLeft: 4 }}>· {group.guide1}{group.guide2 ? `, ${group.guide2}` : ''}</span>
-        )}
       </div>
       <div className="group-progress-row">
         <div className="group-progress-bar">
@@ -65,6 +62,7 @@ export default async function DashboardPage() {
     .from('grades')
     .select('student_id')
     .eq('faculty_id', user!.id)
+    .gt('marks', 0)
 
   const gradedStudentIds = new Set(myGrades?.map((g) => g.student_id) ?? [])
   const totalStudents = groups.reduce((sum, g) => sum + (g.students?.length ?? 0), 0)
