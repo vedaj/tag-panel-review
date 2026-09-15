@@ -1,8 +1,6 @@
 'use client'
-import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
+import { usePathname } from 'next/navigation'
 import type { Profile } from '@/types/database'
 import {
   GraduationCap,
@@ -12,8 +10,6 @@ import {
   BookOpen,
   FileText,
   Users as UsersIcon,
-  LogOut,
-  Menu,
   X,
 } from 'lucide-react'
 
@@ -36,113 +32,112 @@ const navItems: NavItem[] = [
 
 interface SidebarProps {
   profile: Profile | null
+  open: boolean
+  mobileOpen: boolean
+  onMobileToggle: () => void
+  onMobileClose: () => void
 }
 
-export function Sidebar({ profile }: SidebarProps) {
+export function Sidebar({ profile, open, mobileOpen, onMobileClose }: SidebarProps) {
   const pathname = usePathname()
-  const router = useRouter()
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const supabase = createClient()
-
   const isAdmin = profile?.role === 'admin'
   const visibleItems = navItems.filter((item) => !item.adminOnly || isAdmin)
 
-  async function handleLogout() {
-    await supabase.auth.signOut()
-    router.push('/login')
-    router.refresh()
-  }
-
-  const NavContent = () => (
-    <>
-      <div className="brand-block">
-        <p className="eyebrow">Data Science TAG</p>
-        <h2 className="brand-mark">TAG Panel Review</h2>
-        <p className="brand-caption">Dept. of CSE · School of Computing<br />Amrita Vishwa Vidyapeetham</p>
-      </div>
-
-      <nav className="nav-section">
-        <p className="sidebar-section-title">Navigation</p>
-        <div className="nav-group">
-          {visibleItems.map((item) => {
-            const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setMobileOpen(false)}
-                className={`nav-item${active ? ' active' : ''}`}
-              >
-                <div className="nav-item-head">
-                  <span className="nav-item-icon">
-                    <item.icon size={15} />
-                  </span>
-                  <strong>{item.label}</strong>
-                </div>
-                <span className="nav-caption">{item.caption}</span>
-              </Link>
-            )
-          })}
-        </div>
-      </nav>
-
-      <div className="sidebar-user">
-        <div className="sidebar-user-row">
-          <div className="sidebar-avatar">
-            {profile?.name?.[0]?.toUpperCase() ?? '?'}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <p className="sidebar-user-name">{profile?.name ?? 'Faculty'}</p>
-            <p className="sidebar-user-role">{profile?.role}</p>
-          </div>
-        </div>
-        <button className="sidebar-signout" onClick={handleLogout}>
-          <LogOut size={14} />
-          Sign out
-        </button>
-      </div>
-    </>
+  const NavLinks = ({ onNav }: { onNav?: () => void }) => (
+    <div className="nav-group">
+      {visibleItems.map((item) => {
+        const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            onClick={onNav}
+            className={`nav-item${active ? ' active' : ''}`}
+            title={!open ? item.label : undefined}
+          >
+            <div className="nav-item-head">
+              <span className="nav-item-icon">
+                <item.icon size={15} />
+              </span>
+              {open && <strong>{item.label}</strong>}
+            </div>
+            {open && <span className="nav-caption">{item.caption}</span>}
+          </Link>
+        )
+      })}
+    </div>
   )
 
   return (
     <>
-      {/* Desktop sidebar — rendered in app-shell grid */}
-      <aside className="sidebar">
-        <NavContent />
-      </aside>
-
-      {/* Mobile top bar */}
-      <div className="mobile-topbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      {/* Desktop sidebar */}
+      <aside className={`sidebar${open ? '' : ' sidebar-collapsed'}`}>
+        {/* Brand block */}
+        <div className="brand-block" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: 32, height: 32, borderRadius: 8,
-            background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))',
+            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+            background: 'hsl(var(--primary) / 0.12)',
+            color: 'hsl(var(--primary))',
+            boxShadow: '0 0 0 1px hsl(var(--primary) / 0.15)',
           }}>
             <GraduationCap size={16} />
           </span>
-          <span style={{ fontWeight: 600, fontSize: '0.92rem' }}>TAG Panel Review</span>
+          {open && (
+            <div>
+              <p className="eyebrow" style={{ fontSize: '0.68rem' }}>Data Science TAG</p>
+              <h2 className="brand-mark" style={{ fontSize: '1.1rem', margin: 0 }}>TAG Panel Review</h2>
+            </div>
+          )}
         </div>
-        <button
-          onClick={() => setMobileOpen(!mobileOpen)}
-          style={{ padding: '6px', background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--app-hero-text)' }}
-        >
-          {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-        </button>
-      </div>
+
+        {/* Nav */}
+        <nav className="nav-section">
+          {open && <p className="sidebar-section-title">Navigation</p>}
+          <NavLinks />
+        </nav>
+      </aside>
 
       {/* Mobile drawer */}
       {mobileOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 40, display: 'flex' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex' }}>
           <div style={{
-            width: 280, marginTop: 56, overflowY: 'auto',
+            width: 280, overflowY: 'auto',
             background: 'linear-gradient(180deg, var(--sidebar), var(--sidebar-accent))',
             borderRight: '1px solid var(--sidebar-border)',
             padding: 20, display: 'grid', gap: 20, alignContent: 'start',
           }}>
-            <NavContent />
+            {/* Mobile drawer header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  width: 32, height: 32, borderRadius: 8,
+                  background: 'hsl(var(--primary) / 0.12)',
+                  color: 'hsl(var(--primary))',
+                  boxShadow: '0 0 0 1px hsl(var(--primary) / 0.15)',
+                }}>
+                  <GraduationCap size={16} />
+                </span>
+                <div>
+                  <p className="eyebrow" style={{ fontSize: '0.68rem' }}>Data Science TAG</p>
+                  <h2 className="brand-mark" style={{ fontSize: '1.1rem', margin: 0 }}>TAG Panel Review</h2>
+                </div>
+              </div>
+              <button
+                onClick={onMobileClose}
+                style={{ padding: 6, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--sidebar-foreground)' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <nav className="nav-section">
+              <p className="sidebar-section-title">Navigation</p>
+              <NavLinks onNav={onMobileClose} />
+            </nav>
           </div>
-          <div style={{ flex: 1, background: 'rgba(0,0,0,0.3)' }} onClick={() => setMobileOpen(false)} />
+          <div style={{ flex: 1, background: 'rgba(0,0,0,0.4)' }} onClick={onMobileClose} />
         </div>
       )}
     </>

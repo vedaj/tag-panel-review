@@ -2,6 +2,9 @@
 
 import type { Group, Student, Criteria, Grade, Profile } from '@/types/database'
 import { BarChart2, TrendingUp, Users, ShieldCheck, Target, Award, Activity } from 'lucide-react'
+import {
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+} from 'recharts'
 
 interface Props {
   isAdmin: boolean
@@ -117,37 +120,46 @@ function HBar({ pct, color, bg }: { pct: number; color: string; bg?: string }) {
   )
 }
 
-function Histogram({ bins, total }: { bins: number[]; total: number }) {
-  const maxBin = Math.max(...bins, 1)
-  const labels = ['0–10', '10–20', '20–30', '30–40', '40–50', '50–60', '60–70', '70–80', '80–90', '90–100']
+const BUCKET_LABELS = ['0–10', '10–20', '20–30', '30–40', '40–50', '50–60', '60–70', '70–80', '80–90', '90–100']
+
+function Histogram({ bins }: { bins: number[] }) {
+  const data = bins.map((count, i) => ({
+    label: `${i * 10}`,
+    fullLabel: BUCKET_LABELS[i],
+    count,
+    color: (i + 1) * 10 > 75 ? '#16a34a' : (i + 1) * 10 > 50 ? '#ca8a04' : '#dc2626',
+  }))
+
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 120 }}>
-      {bins.map((count, i) => {
-        const heightPct = (count / maxBin) * 100
-        const binPct = (i + 1) * 10
-        const color = binPct > 75 ? '#16a34a' : binPct > 50 ? '#ca8a04' : '#dc2626'
-        return (
-          <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
-            {count > 0 && (
-              <span style={{ fontSize: '0.65rem', color: '#6b7280', fontWeight: 600 }}>{count}</span>
-            )}
-            <div
-              title={`${labels[i]}%: ${count} student${count !== 1 ? 's' : ''}`}
-              style={{
-                width: '100%', borderRadius: '4px 4px 0 0',
-                background: count > 0 ? color : '#e5e7eb',
-                height: count > 0 ? `${heightPct}%` : 4,
-                minHeight: 4,
-                transition: 'height 0.4s ease',
-              }}
-            />
-            <span style={{ fontSize: '0.6rem', color: '#9ca3af', textAlign: 'center', lineHeight: 1.2 }}>
-              {i * 10}
-            </span>
-          </div>
-        )
-      })}
-    </div>
+    <ResponsiveContainer width="100%" height={140}>
+      <BarChart data={data} barSize={22} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+        <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+        <YAxis allowDecimals={false} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+        <Tooltip
+          cursor={{ fill: 'hsl(var(--muted) / 0.4)' }}
+          content={({ active, payload }) => {
+            if (!active || !payload?.length) return null
+            const d = payload[0].payload as (typeof data)[0]
+            return (
+              <div style={{
+                background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))',
+                borderRadius: 8, padding: '6px 10px', fontSize: '0.78rem',
+              }}>
+                <p style={{ margin: 0, fontWeight: 600 }}>{d.fullLabel}%</p>
+                <p style={{ margin: 0, color: 'hsl(var(--muted-foreground))' }}>
+                  {d.count} student{d.count !== 1 ? 's' : ''}
+                </p>
+              </div>
+            )
+          }}
+        />
+        <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+          {data.map((entry, i) => (
+            <Cell key={i} fill={entry.count > 0 ? entry.color : '#e5e7eb'} />
+          ))}
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
   )
 }
 
@@ -331,7 +343,7 @@ export default function AnalyticsClient({
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ padding: '20px 20px 40px', paddingTop: 'calc(20px + 56px)', maxWidth: 820 }} className="md:pt-8">
+    <div style={{ padding: '20px 20px 40px', maxWidth: 820 }}>
 
       {/* Page header */}
       <div style={{ marginBottom: 24 }}>
@@ -371,7 +383,7 @@ export default function AnalyticsClient({
             <p style={{ fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))', marginBottom: 12 }}>
               % of max marks given across {myStudentPcts.length} student{myStudentPcts.length !== 1 ? 's' : ''} you evaluated
             </p>
-            <Histogram bins={myHistogram} total={myStudentPcts.length} />
+            <Histogram bins={myHistogram} />
             <p style={{ fontSize: '0.75rem', color: 'hsl(var(--muted-foreground))', textAlign: 'center', marginTop: 6 }}>Score bucket (%)</p>
           </SectionCard>
         )}
@@ -422,7 +434,7 @@ export default function AnalyticsClient({
             <p style={{ fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))', marginBottom: 12 }}>
               Mean score across all faculty per student — {classStudentPcts.length} students graded
             </p>
-            <Histogram bins={classHistogram} total={classStudentPcts.length} />
+            <Histogram bins={classHistogram} />
             <p style={{ fontSize: '0.75rem', color: 'hsl(var(--muted-foreground))', textAlign: 'center', marginTop: 6 }}>Score bucket (%)</p>
           </SectionCard>
         )}
