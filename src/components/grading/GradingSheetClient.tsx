@@ -228,13 +228,27 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
   const selectedTypeInfo = PROJECT_TYPES.find((t) => t.value === projectType)
 
   // ── Project type gate ────────────────────────────────────────────────────
+  // group.project_type is the persisted DB value; projectType is local state.
+  // If the DB has a type but local state is empty, the user is changing it.
+  const isChangingType = Boolean(group.project_type) && !projectType
+
   if (!projectType) {
     return (
       <div className="min-h-screen bg-background md:pt-0 pt-14 flex items-start justify-center">
         <div className="w-full max-w-2xl px-4 md:px-8 py-10">
-          <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8">
-            <ArrowLeft size={16} /> Back to Dashboard
-          </Link>
+          {isChangingType ? (
+            <button
+              onClick={() => setProjectTypeState(group.project_type as ProjectType)}
+              className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+            >
+              <ArrowLeft size={16} /> Back to Grading
+            </button>
+          ) : (
+            <Link href="/dashboard" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-8">
+              <ArrowLeft size={16} /> Back to Dashboard
+            </Link>
+          )}
           <div className="mb-6">
             <h1 className="text-2xl font-bold">{group.name}</h1>
             {group.project_title && <p className="text-muted-foreground mt-1">{group.project_title}</p>}
@@ -248,12 +262,14 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
               borderRadius: '20px',
               background: 'linear-gradient(180deg, var(--app-panel-strong), var(--app-panel))',
             }}>
-              <p className="eyebrow mb-2">Step 1</p>
+              <p className="eyebrow mb-2">{isChangingType ? 'Change' : 'Step 1'}</p>
               <h2 style={{ margin: '0 0 4px', fontFamily: 'var(--title-font)', fontSize: '1.4rem', letterSpacing: '-0.03em', color: 'var(--app-hero-text)' }}>
-                Select Project Type
+                {isChangingType ? 'Change Project Type' : 'Select Project Type'}
               </h2>
               <p style={{ color: 'var(--app-hero-subtext)', fontSize: '0.88rem', marginBottom: '20px' }}>
-                Choose the category that best describes this group&apos;s project. This determines which rubric criteria are shown.
+                {isChangingType
+                  ? 'Select a new type for this group. Existing marks are kept.'
+                  : 'Choose the category that best describes this group’s project. This determines which rubric criteria are shown.'}
               </p>
               <div style={{ display: 'grid', gap: '12px' }}>
                 {PROJECT_TYPES.map(({ value, label, description, Icon }) => (
