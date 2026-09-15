@@ -1,5 +1,4 @@
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const XLSX = require('xlsx-js-style') as typeof import('xlsx')
+import * as XLSX from 'xlsx-js-style'
 import type { Group, Student, Profile, Criteria, Grade, Feedback } from '@/types/database'
 
 // ── Import helpers ──────────────────────────────────────────────────────────
