@@ -7,6 +7,7 @@ import type { Profile } from '@/types/database'
 import {
   GraduationCap,
   LayoutDashboard,
+  BarChart2,
   Upload,
   BookOpen,
   FileText,
@@ -26,6 +27,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', caption: 'Overview of your groups', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Analytics', caption: 'Performance insights', href: '/analytics', icon: BarChart2 },
   { label: 'Import Data', caption: 'Upload student data', href: '/admin/import', icon: Upload, adminOnly: true },
   { label: 'Rubrics', caption: 'Manage grading criteria', href: '/admin/rubrics', icon: BookOpen, adminOnly: true },
   { label: 'Report', caption: 'Download grade report', href: '/admin/report', icon: FileText, adminOnly: true },
