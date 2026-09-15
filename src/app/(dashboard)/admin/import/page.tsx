@@ -74,6 +74,12 @@ export default function ImportPage() {
 
           if (existing) {
             groupMap.set(groupName, existing.id)
+            // Update metadata (title, guides) without touching grades or students
+            await supabase.from('groups').update({
+              project_title: first.project_title?.trim() ?? '',
+              guide1: first.guide1?.trim() ?? '',
+              guide2: first.guide2?.trim() || null,
+            }).eq('id', existing.id)
           } else {
             const { data: newGroup, error } = await supabase
               .from('groups')
