@@ -85,13 +85,13 @@ export default async function DashboardPage() {
           Welcome, {profile?.name}
         </h1>
         <p className="section-subtitle">
-          {isAdmin ? 'Admin view — all groups' : 'Your assigned panel groups'}
+          {isAdmin ? 'Admin view — all groups' : 'Groups you\'re reviewing'}
         </p>
       </div>
 
       {/* Stats */}
       <div className="dashboard-section">
-        <p className="eyebrow">Overview</p>
+        <p className="eyebrow">At a glance</p>
         <div className="stat-grid">
           <div className="stat-card">
             <div className="stat-icon"><ClipboardList size={18} /></div>
@@ -106,7 +106,7 @@ export default async function DashboardPage() {
           <div className="stat-card">
             <div className="stat-icon"><CheckCircle2 size={18} /></div>
             <span className="stat-value">{gradedStudentIds.size}</span>
-            <span className="stat-label">Students Graded</span>
+            <span className="stat-label">Graded</span>
           </div>
         </div>
       </div>
@@ -120,9 +120,9 @@ export default async function DashboardPage() {
       {/* Yet to grade */}
       {pendingGroups.length > 0 && (
         <div className="dashboard-section">
-          <p className="eyebrow">Pending</p>
+          <p className="eyebrow">Still to review</p>
           <h2 className="section-title" style={{ marginTop: 4, fontSize: '1.3rem' }}>
-            Yet to Grade
+            Left to grade
             <span style={{ marginLeft: 10, fontSize: '0.85rem', fontFamily: 'var(--body-font)', fontWeight: 500, color: 'var(--app-hero-subtext)', letterSpacing: 0 }}>
               {pendingGroups.length} group{pendingGroups.length !== 1 ? 's' : ''}
             </span>

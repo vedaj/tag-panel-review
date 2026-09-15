@@ -349,17 +349,17 @@ export default function AnalyticsClient({
       <div style={{ marginBottom: 24 }}>
         <p className="eyebrow" style={{ marginBottom: 4 }}>Analytics</p>
         <h1 style={{ margin: 0, fontFamily: 'var(--title-font)', fontSize: '1.9rem', letterSpacing: '-0.03em', color: 'var(--app-hero-text)', lineHeight: 1.1 }}>
-          Performance Insights
+          Grading overview
         </h1>
         <p style={{ color: 'var(--app-hero-subtext)', fontSize: '0.88rem', marginTop: 6 }}>
-          {isAdmin ? 'Class-wide analytics and your personal grading summary.' : 'Your grading summary and scoring patterns.'}
+          {isAdmin ? 'Class-wide numbers and your own grading summary.' : 'A look at how your grading has gone so far.'}
         </p>
       </div>
 
       <div style={{ display: 'grid', gap: 16 }}>
 
         {/* ── Personal: summary pills ── */}
-        <SectionCard title={`My Grading Summary — ${facultyName}`} icon={Activity}>
+        <SectionCard title={`My grading so far — ${facultyName}`} icon={Activity}>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: myGradedCount > 0 ? 16 : 0 }}>
             <StatPill value={groupsIEvaluated.length} label="Teams fully graded" color="var(--brand-600)" />
             <StatPill value={groupsPartial.length} label="Teams in progress" color="#ca8a04" />
@@ -379,9 +379,9 @@ export default function AnalyticsClient({
 
         {/* ── Personal: score distribution ── */}
         {myStudentPcts.length > 0 && (
-          <SectionCard title="My Score Distribution" icon={BarChart2}>
+          <SectionCard title="How I scored" icon={BarChart2}>
             <p style={{ fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))', marginBottom: 12 }}>
-              % of max marks given across {myStudentPcts.length} student{myStudentPcts.length !== 1 ? 's' : ''} you evaluated
+              Scores given across {myStudentPcts.length} student{myStudentPcts.length !== 1 ? 's' : ''}, as a share of the maximum
             </p>
             <Histogram bins={myHistogram} />
             <p style={{ fontSize: '0.75rem', color: 'hsl(var(--muted-foreground))', textAlign: 'center', marginTop: 6 }}>Score bucket (%)</p>
@@ -390,9 +390,9 @@ export default function AnalyticsClient({
 
         {/* ── Personal: criteria pattern ── */}
         {myCriteriaAvg.length > 0 && (
-          <SectionCard title="My Criteria Scoring Pattern" icon={Target}>
+          <SectionCard title="My scoring by criterion" icon={Target}>
             <p style={{ fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))', marginBottom: 14 }}>
-              Your average score per criterion as % of maximum marks
+              How your marks compare to the maximum, for each criterion
             </p>
             <div style={{ display: 'grid', gap: 10 }}>
               {myCriteriaAvg.map(({ title, avgPct }) => (
@@ -414,7 +414,7 @@ export default function AnalyticsClient({
 
         {/* ── Admin: class overview ── */}
         {isAdmin && (
-          <SectionCard title="Class Overview" icon={Users} adminOnly>
+          <SectionCard title="Class at a glance" icon={Users} adminOnly>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               <StatPill value={adminTotalGraded} label={`of ${totalStudents} students graded`} color="#4f46e5" />
               <StatPill value={groupLeaderboard.length} label={`of ${groups.filter(g => g.project_type).length} teams evaluated`} color="var(--brand-600)" />
@@ -430,9 +430,9 @@ export default function AnalyticsClient({
 
         {/* ── Admin: class score distribution ── */}
         {isAdmin && classStudentPcts.length > 0 && (
-          <SectionCard title="Class Score Distribution" icon={BarChart2} adminOnly>
+          <SectionCard title="Class scores" icon={BarChart2} adminOnly>
             <p style={{ fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))', marginBottom: 12 }}>
-              Mean score across all faculty per student — {classStudentPcts.length} students graded
+              Each student&apos;s average across all reviewers — {classStudentPcts.length} student{classStudentPcts.length !== 1 ? 's' : ''} graded
             </p>
             <Histogram bins={classHistogram} />
             <p style={{ fontSize: '0.75rem', color: 'hsl(var(--muted-foreground))', textAlign: 'center', marginTop: 6 }}>Score bucket (%)</p>
@@ -441,9 +441,9 @@ export default function AnalyticsClient({
 
         {/* ── Admin: criteria heatmap ── */}
         {isAdmin && classCriteriaAvg.length > 0 && (
-          <SectionCard title="Criteria Performance Heatmap" icon={TrendingUp} adminOnly>
+          <SectionCard title="Results by criterion" icon={TrendingUp} adminOnly>
             <p style={{ fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))', marginBottom: 14 }}>
-              Class average per criterion as % of max marks — reveals rubric strengths and gaps
+              Where students scored well and where they fell short, across all reviewers
             </p>
             <div style={{ display: 'grid', gap: 10 }}>
               {classCriteriaAvg.map(({ title, avgPct, type }) => {
@@ -475,9 +475,9 @@ export default function AnalyticsClient({
 
         {/* ── Admin: group leaderboard ── */}
         {isAdmin && groupLeaderboard.length > 0 && (
-          <SectionCard title="Group Leaderboard" icon={Award} adminOnly>
+          <SectionCard title="Group rankings" icon={Award} adminOnly>
             <p style={{ fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))', marginBottom: 12 }}>
-              Ranked by mean total score across all panel members
+              Groups sorted by their average total score across all reviewers
             </p>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
@@ -516,16 +516,16 @@ export default function AnalyticsClient({
               </table>
             </div>
             <p style={{ fontSize: '0.7rem', color: 'hsl(var(--muted-foreground))', marginTop: 10 }}>
-              Spread = half the gap between highest and lowest faculty total for that group
+              Spread: how far apart reviewers&apos; totals were for that group
             </p>
           </SectionCard>
         )}
 
         {/* ── Admin: faculty coverage ── */}
         {isAdmin && facultyCoverage.length > 0 && (
-          <SectionCard title="Faculty Grading Coverage" icon={ShieldCheck} adminOnly>
+          <SectionCard title="Who's reviewed what" icon={ShieldCheck} adminOnly>
             <p style={{ fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))', marginBottom: 12 }}>
-              How many students and teams each faculty member has evaluated
+              Breakdown of students and groups each reviewer has covered
             </p>
             <div style={{ display: 'grid', gap: 8 }}>
               {facultyCoverage.map(({ profile: p, studentsGraded, groupsGraded }) => {

@@ -163,7 +163,7 @@ export default function RubricsPage() {
           <p className="eyebrow mb-1">Admin</p>
           <h1 style={{ margin: 0, fontFamily: 'var(--title-font)', fontSize: '1.8rem', letterSpacing: '-0.03em', color: 'var(--app-hero-text)' }}>Rubrics</h1>
           <p style={{ color: 'var(--app-hero-subtext)', fontSize: '0.88rem', marginTop: 4 }}>
-            Set project type, max marks, and allowed mark values per sub-criterion.
+            Define criteria, max marks, and which mark values reviewers can award.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -234,7 +234,7 @@ export default function RubricsPage() {
                   </div>
                   {crit.allowed_marks && crit.sub_criteria.length === 0 && (
                     <p className="text-xs text-muted-foreground">
-                      Faculty will see radio buttons: {crit.allowed_marks.split(',').map(s => s.trim()).join(' · ')}
+                      Reviewers pick from: {crit.allowed_marks.split(',').map(s => s.trim()).join(' · ')}
                     </p>
                   )}
                   {/* Description */}
@@ -320,7 +320,7 @@ export default function RubricsPage() {
                       />
                       {sub.allowed_marks && (
                         <p className="text-xs text-muted-foreground">
-                          Faculty will see radio buttons: {sub.allowed_marks.split(',').map(s => s.trim()).join(' · ')}
+                          Reviewers pick from: {sub.allowed_marks.split(',').map(s => s.trim()).join(' · ')}
                         </p>
                       )}
                     </div>

@@ -133,7 +133,7 @@ export default function ReportPage() {
           Grade Report
         </h1>
         <p style={{ color: 'var(--app-hero-subtext)', fontSize: '0.88rem', marginTop: 6 }}>
-          Monitor grading progress and export results by project type.
+          Track how grading is going and download results by project type.
         </p>
       </div>
 
@@ -164,7 +164,7 @@ export default function ReportPage() {
 
           {!stats ? (
             <div style={{ padding: '28px 20px', color: 'hsl(var(--muted-foreground))', fontSize: '0.84rem', textAlign: 'center' }}>
-              Click &ldquo;Load Stats&rdquo; to see current grading progress.
+              Hit &ldquo;Load Stats&rdquo; to see where grading stands.
             </div>
           ) : (
             <table className="progress-table">
@@ -239,7 +239,7 @@ export default function ReportPage() {
           </div>
           <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
             <p style={{ margin: 0, fontSize: '0.84rem', color: 'hsl(var(--muted-foreground))' }}>
-              One file with three sheets — Research, Application, and Software — each containing all groups of that type with criteria scores, student comments, and group comments.
+              Three sheets in one file — Research, Application, and Software — each with all group scores, student comments, and group notes.
             </p>
             <button
               onClick={() => handleDownload('all')}
@@ -274,7 +274,7 @@ export default function ReportPage() {
           </div>
           <div style={{ padding: '18px 20px' }}>
             <p style={{ margin: '0 0 14px', fontSize: '0.83rem', color: 'hsl(var(--muted-foreground))' }}>
-              Group, title, guides, roll numbers, 4 criteria means, total, %, per-student comments, and group comments.
+              Includes group, title, guides, roll numbers, criteria averages, total, percentage, and all comments.
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
               {PROJECT_TYPES.map(({ key, label, icon, color }) => (
@@ -309,7 +309,7 @@ export default function ReportPage() {
           </div>
           <div style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
             <p style={{ margin: 0, fontSize: '0.84rem', color: 'hsl(var(--muted-foreground))' }}>
-              One row per student per faculty — shows exactly which marks each evaluator awarded, for cross-checking and moderation. Confidential admin-only export.
+              Shows every mark each reviewer gave, one row per student per evaluator. Useful for cross-checking and moderation. Admin only.
             </p>
             <button
               onClick={() => handleDownload('audit')}
@@ -344,7 +344,7 @@ export default function ReportPage() {
             {!confirmReset ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                 <p style={{ margin: 0, fontSize: '0.84rem', color: 'hsl(var(--muted-foreground))' }}>
-                  Permanently deletes all grade entries and feedback for every student across all faculty. Optionally also clears the project type assigned to each group. Cannot be undone.
+                  Wipes every grade and piece of feedback across all reviewers. You can also clear the project type for each group. Cannot be undone.
                 </p>
                 <Button variant="destructive" className="gap-2" onClick={() => setConfirmReset(true)} style={{ flexShrink: 0 }}>
                   <Trash2 size={14} />Reset All Grades
@@ -355,7 +355,7 @@ export default function ReportPage() {
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '11px 14px', borderRadius: 'calc(var(--radius) * 1.2)', background: '#fff5f5', border: '1px solid #fecaca' }}>
                   <AlertTriangle size={15} style={{ color: '#dc2626', marginTop: 1, flexShrink: 0 }} />
                   <p style={{ margin: 0, fontSize: '0.84rem', color: '#7f1d1d' }}>
-                    Choose what to reset. All grades and feedback for every faculty member will be deleted and the graded/ungraded counts will be cleared. This cannot be undone.
+                    Pick what to clear. All marks and feedback are deleted permanently — this cannot be undone.
                   </p>
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>

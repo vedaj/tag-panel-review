@@ -245,7 +245,7 @@ export function UsersClient({ users, currentUserId, createUser, updateRole, setP
       {deleteTarget && (
         <Modal title="Delete User?" onClose={() => setDeleteTarget(null)}>
           <p style={{ fontSize: '0.88rem', color: 'hsl(var(--muted-foreground))', marginBottom: 20 }}>
-            This will permanently delete <strong style={{ color: 'var(--app-hero-text)' }}>{deleteTarget.name || deleteTarget.email}</strong> and all their data. This cannot be undone.
+            This removes <strong style={{ color: 'var(--app-hero-text)' }}>{deleteTarget.name || deleteTarget.email}</strong> and all the grades they&apos;ve entered. This cannot be undone.
           </p>
           <div style={{ display: 'flex', gap: 8 }}>
             <Button

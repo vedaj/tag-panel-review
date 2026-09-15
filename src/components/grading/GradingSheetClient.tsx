@@ -309,8 +309,8 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
               </h2>
               <p style={{ color: 'var(--app-hero-subtext)', fontSize: '0.88rem', marginBottom: '20px' }}>
                 {isChangingType
-                  ? 'Select a new type for this group. Existing marks are kept.'
-                  : 'Choose the category that best describes this group’s project. This determines which rubric criteria are shown.'}
+                  ? "Change the type — your existing marks won’t be lost."
+                  : "Pick the type that fits this group’s work. It decides which rubric you’ll see."}
               </p>
               <div style={{ display: 'grid', gap: '12px' }}>
                 {PROJECT_TYPES.map(({ value, label, description, Icon }) => (
@@ -367,7 +367,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
                 Project Type Not Set
               </h2>
               <p style={{ color: 'var(--app-hero-subtext)', fontSize: '0.9rem', lineHeight: 1.6, maxWidth: 360, margin: '0 auto' }}>
-                The project type for <strong>{group.name}</strong> hasn&apos;t been set yet. Please ask your admin to assign a project type before you can begin grading.
+                No project type has been set for <strong>{group.name}</strong> yet. Ask your admin to assign one before you start grading.
               </p>
             </div>
           )}
@@ -514,7 +514,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
             <AlertTriangle size={16} style={{ color: '#dc2626', marginTop: 1, flexShrink: 0 }} />
             <div style={{ flex: 1 }}>
               <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: '#7f1d1d', fontWeight: 500 }}>
-                Choose what to reset. Other faculty&apos;s marks are unaffected.
+                This only clears your marks for this group — other reviewers keep theirs.
               </p>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 <Button variant="destructive" size="sm" className="gap-1.5" onClick={() => handleResetMarks(false)} disabled={resetting}>
@@ -539,8 +539,8 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
               <Info size={32} className="mx-auto mb-3 opacity-40" />
-              <p>No criteria found for the selected project type.</p>
-              <p className="text-sm">Ask an admin to configure rubrics for this project type.</p>
+              <p>No rubric set up for this project type yet.</p>
+              <p className="text-sm">Ask an admin to add criteria for this type.</p>
             </CardContent>
           </Card>
         ) : (
@@ -705,7 +705,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
               <div>
                 <label className="text-sm font-medium mb-2 block">Group Feedback</label>
                 <Textarea
-                  placeholder="Overall feedback for the group / project…"
+                  placeholder="Any notes on the project or the group overall…"
                   value={feedbacks[feedbackKey(group.id, null)] ?? ''}
                   onChange={(e) => { setFeedbacks((prev) => ({ ...prev, [feedbackKey(group.id, null)]: e.target.value })); setSaved(false) }}
                   rows={3}
@@ -713,7 +713,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
               </div>
               <Separator />
               <div className="space-y-4">
-                <p className="text-sm font-medium">Individual Student Feedback</p>
+                <p className="text-sm font-medium">Per-student feedback</p>
                 {students.map((s) => (
                   <div key={s.id}>
                     <label className="text-sm text-muted-foreground mb-1.5 block">

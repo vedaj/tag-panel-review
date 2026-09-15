@@ -91,7 +91,7 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose }: SidebarPro
 
         {/* Nav */}
         <nav className="nav-section">
-          {open && <p className="sidebar-section-title">Navigation</p>}
+          {open && <p className="sidebar-section-title">Menu</p>}
           <NavLinks />
         </nav>
       </aside>
@@ -131,7 +131,7 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose }: SidebarPro
             </div>
 
             <nav style={{ padding: '4px 12px 20px' }}>
-              <p className="sidebar-section-title">Navigation</p>
+              <p className="sidebar-section-title">Menu</p>
               <NavLinks onNav={onMobileClose} forceOpen />
             </nav>
           </div>

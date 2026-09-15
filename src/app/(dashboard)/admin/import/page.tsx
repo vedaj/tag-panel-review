@@ -178,7 +178,7 @@ export default function ImportPage() {
     <div className="p-6 md:p-8 pt-20 md:pt-8 max-w-4xl">
       <div className="mb-8">
         <h1 className="text-2xl font-bold">Import Data</h1>
-        <p className="text-muted-foreground">Upload Excel files to populate students, groups, and faculty.</p>
+        <p className="text-muted-foreground">Upload your spreadsheets to add students, groups, and faculty accounts.</p>
       </div>
 
       {/* Format guide */}
@@ -187,7 +187,7 @@ export default function ImportPage() {
           <div className="flex gap-3">
             <Info size={18} className="text-blue-600 mt-0.5 flex-shrink-0" />
             <div className="text-sm space-y-2">
-              <p className="font-semibold text-blue-900">Expected Excel column headers:</p>
+              <p className="font-semibold text-blue-900">Your spreadsheet needs these columns:</p>
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
                   <p className="font-medium text-blue-800">Students file:</p>
@@ -215,7 +215,7 @@ export default function ImportPage() {
               <GraduationCap size={18} />
               Students &amp; Groups
             </CardTitle>
-            <CardDescription>One row per student. Rows with the same group_name are grouped together.</CardDescription>
+            <CardDescription>One student per row — rows sharing a group_name form one group.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <input ref={studentFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleStudentFileChange} />
@@ -244,7 +244,7 @@ export default function ImportPage() {
               <Users size={18} />
               Faculty
             </CardTitle>
-            <CardDescription>Faculty accounts will be created in Supabase Auth. They can reset passwords via email.</CardDescription>
+            <CardDescription>Each person gets an account. They can set their own password via email.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <input ref={facultyFileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={handleFacultyFileChange} />
