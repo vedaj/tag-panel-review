@@ -53,6 +53,18 @@ export default function ImportPage() {
     let facultyCreated = 0
 
     try {
+      // Resolve caller's tag_id so groups are created under the right TAG
+      const { data: { user: caller } } = await supabase.auth.getUser()
+      let callerTagId: string | null = null
+      if (caller) {
+        const { data: callerProfile } = await supabase
+          .from('profiles')
+          .select('tag_id')
+          .eq('id', caller.id)
+          .single()
+        callerTagId = callerProfile?.tag_id ?? null
+      }
+
       // ── Import students ─────────────────────────────────────────────────
       if (studentFile) {
         const rows = await parseStudentExcel(studentFile)
@@ -88,6 +100,7 @@ export default function ImportPage() {
                 project_title: first.project_title?.trim() ?? '',
                 guide1: first.guide1?.trim() ?? '',
                 guide2: first.guide2?.trim() || null,
+                tag_id: callerTagId,
               })
               .select('id')
               .single()
@@ -157,6 +170,7 @@ export default function ImportPage() {
                 name: row.name?.trim() ?? row.email.split('@')[0],
                 email: row.email.trim().toLowerCase(),
                 role: (row.role?.trim() as 'admin' | 'faculty') || 'faculty',
+                tag_id: callerTagId,
               },
               { onConflict: 'email' }
             )

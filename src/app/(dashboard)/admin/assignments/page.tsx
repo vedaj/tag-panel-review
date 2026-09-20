@@ -23,9 +23,21 @@ export default function AssignmentsPage() {
 
   async function loadData() {
     setLoading(true)
+    // Scope to caller's TAG
+    const { data: { user } } = await supabase.auth.getUser()
+    let tagId: string | null = null
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('tag_id, role').eq('id', user.id).single()
+      if (profile?.role !== 'institution_admin') tagId = profile?.tag_id ?? null
+    }
+
+    let groupsQ = supabase.from('groups').select('*').order('name')
+    let facultyQ = supabase.from('profiles').select('*').order('name')
+    if (tagId) { groupsQ = groupsQ.eq('tag_id', tagId); facultyQ = facultyQ.eq('tag_id', tagId) }
+
     const [{ data: g }, { data: f }, { data: a }] = await Promise.all([
-      supabase.from('groups').select('*').order('name'),
-      supabase.from('profiles').select('*').order('name'),
+      groupsQ,
+      facultyQ,
       supabase.from('panel_assignments').select('*'),
     ])
 

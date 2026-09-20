@@ -34,10 +34,23 @@ export default function ReportPage() {
 
   async function loadStats() {
     setLoading(true)
+    // Resolve caller's TAG for scoped queries
+    const { data: { user } } = await supabase.auth.getUser()
+    let tagId: string | null = null
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('tag_id, role').eq('id', user.id).single()
+      // institution_admin in institution scope: no filter; otherwise filter by tag
+      if (profile?.role !== 'institution_admin') tagId = profile?.tag_id ?? null
+    }
+
+    let groupsQ = supabase.from('groups').select('*').order('name')
+    let facultyQ = supabase.from('profiles').select('*')
+    if (tagId) { groupsQ = groupsQ.eq('tag_id', tagId); facultyQ = facultyQ.eq('tag_id', tagId) }
+
     const [{ data: groups }, { data: students }, { data: faculty }, { data: grades }] = await Promise.all([
-      supabase.from('groups').select('*').order('name'),
+      groupsQ,
       supabase.from('students').select('*'),
-      supabase.from('profiles').select('*'),
+      facultyQ,
       supabase.from('grades').select('student_id').limit(50000),
     ])
     setStats({

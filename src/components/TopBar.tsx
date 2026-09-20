@@ -1,20 +1,26 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { PanelLeftClose, PanelLeftOpen, Menu, LogOut, GraduationCap, Sun, Moon } from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen, Menu, LogOut, GraduationCap, Sun, Moon, Building2, Tag } from 'lucide-react'
 import { createClient } from '@/lib/supabase'
-import type { Profile } from '@/types/database'
+import { setAdminScope } from '@/app/actions/scope'
+import type { Profile, Tag as TagType } from '@/types/database'
+import type { AdminScope } from '@/app/actions/scope'
 
 type Theme = 'light' | 'dark'
 type FontMode = 'serif' | 'sans'
 
 export function TopBar({
   profile,
+  tags,
+  adminScope,
   sidebarOpen,
   onDesktopToggle,
   onMobileToggle,
 }: {
   profile: Profile | null
+  tags: TagType[]
+  adminScope: AdminScope
   sidebarOpen: boolean
   onDesktopToggle: () => void
   onMobileToggle: () => void
@@ -22,19 +28,24 @@ export function TopBar({
   const [menuOpen, setMenuOpen] = useState(false)
   const [theme, setTheme] = useState<Theme>('light')
   const [fontMode, setFontMode] = useState<FontMode>('serif')
+  const [scope, setScope] = useState<AdminScope>(adminScope)
+  const [, startTransition] = useTransition()
   const menuRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = createClient()
 
+  const isInstitutionAdmin = profile?.role === 'institution_admin'
+  const homeTag = tags.find((t) => t.id === profile?.tag_id)
+
   useEffect(() => {
-    // Sync state from what the anti-flash script already applied
     try {
       const t = localStorage.getItem('tag:theme') as Theme | null
       const f = localStorage.getItem('tag:font') as FontMode | null
       if (t) setTheme(t)
       if (f) setFontMode(f)
     } catch {}
-  }, [])
+    setScope(adminScope)
+  }, [adminScope])
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -56,6 +67,14 @@ export function TopBar({
     setFontMode(f)
     try { localStorage.setItem('tag:font', f) } catch {}
     document.documentElement.classList.toggle('font-sans-ui', f === 'sans')
+  }
+
+  function applyScope(s: AdminScope) {
+    setScope(s)
+    startTransition(async () => {
+      await setAdminScope(s)
+      router.refresh()
+    })
   }
 
   async function handleSignOut() {
@@ -93,6 +112,23 @@ export function TopBar({
         {sidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
       </button>
 
+      {/* TAG context badge */}
+      {profile?.tag && (
+        <div className="topbar-tag-badge desktop-only">
+          {isInstitutionAdmin && scope === 'institution' ? (
+            <>
+              <Building2 size={12} />
+              <span>Institution</span>
+            </>
+          ) : (
+            <>
+              <Tag size={12} />
+              <span>{profile.tag.short_name}</span>
+            </>
+          )}
+        </div>
+      )}
+
       {/* User menu — always visible */}
       <div style={{ position: 'relative', marginLeft: 'auto' }} ref={menuRef}>
         <button className="user-menu-pill" onClick={() => setMenuOpen((v) => !v)}>
@@ -101,7 +137,9 @@ export function TopBar({
           </span>
           <span className="user-menu-info desktop-only">
             <span className="user-menu-name">{profile?.name ?? 'Faculty'}</span>
-            <span className="user-menu-role">{profile?.role}</span>
+            <span className="user-menu-role">
+              {isInstitutionAdmin ? 'Institution Admin' : profile?.role}
+            </span>
           </span>
         </button>
 
@@ -114,11 +152,44 @@ export function TopBar({
               </span>
               <div style={{ minWidth: 0 }}>
                 <p className="user-menu-fullname">{profile?.name}</p>
-                <p className="user-menu-badge">{profile?.role}</p>
+                <p className="user-menu-badge">
+                  {isInstitutionAdmin ? 'Institution Admin' : profile?.role}
+                  {profile?.tag && <span style={{ opacity: 0.7 }}> · {profile.tag.short_name}</span>}
+                </p>
               </div>
             </div>
 
             <div className="user-menu-divider" />
+
+            {/* Institution admin: scope toggle */}
+            {isInstitutionAdmin && homeTag && (
+              <>
+                <div className="user-menu-pref-section">
+                  <div className="user-menu-pref-row">
+                    <span className="user-menu-pref-label">View</span>
+                    <div className="user-menu-pref-control">
+                      <button
+                        className={`pref-btn${scope === 'institution' ? ' pref-btn-active' : ''}`}
+                        onClick={() => applyScope('institution')}
+                        title="Institution-wide view"
+                        style={{ width: 'auto', padding: '0 8px', gap: 4, fontSize: '0.72rem' }}
+                      >
+                        <Building2 size={11} /> All
+                      </button>
+                      <button
+                        className={`pref-btn${scope === 'tag' ? ' pref-btn-active' : ''}`}
+                        onClick={() => applyScope('tag')}
+                        title={`${homeTag.short_name} TAG admin view`}
+                        style={{ width: 'auto', padding: '0 8px', gap: 4, fontSize: '0.72rem' }}
+                      >
+                        <Tag size={11} /> {homeTag.short_name}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="user-menu-divider" />
+              </>
+            )}
 
             {/* Preferences */}
             <div className="user-menu-pref-section">

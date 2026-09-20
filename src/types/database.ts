@@ -1,11 +1,20 @@
-export type Role = 'admin' | 'faculty'
+export type Role = 'admin' | 'faculty' | 'institution_admin'
+
+export interface Tag {
+  id: string
+  name: string
+  short_name: string
+  created_at: string
+}
 
 export interface Profile {
   id: string
   name: string
   email: string
   role: Role
+  tag_id: string | null
   created_at: string
+  tag?: Tag
 }
 
 export type ProjectType = 'research' | 'application' | 'software' | ''
@@ -17,6 +26,7 @@ export interface Group {
   guide1: string
   guide2: string | null
   project_type: ProjectType
+  tag_id?: string | null
   created_at: string
   students?: Student[]
   panel_assignments?: PanelAssignment[]
@@ -39,6 +49,7 @@ export interface Criteria {
   order_index: number
   project_type: 'research' | 'application' | 'software' | 'all'
   allowed_marks: string
+  tag_id?: string | null
   created_at: string
   sub_criteria?: SubCriteria[]
 }

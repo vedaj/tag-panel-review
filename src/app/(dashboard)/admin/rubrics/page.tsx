@@ -26,15 +26,31 @@ export default function RubricsPage() {
   const [saving, setSaving] = useState(false)
   const [savedMsg, setSavedMsg] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [callerTagId, setCallerTagId] = useState<string | null>(null)
 
-  useEffect(() => { loadCriteria() }, [])
+  useEffect(() => {
+    async function init() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: profile } = await supabase.from('profiles').select('tag_id').eq('id', user.id).single()
+        setCallerTagId(profile?.tag_id ?? null)
+        await loadCriteria(profile?.tag_id ?? null)
+      } else {
+        await loadCriteria(null)
+      }
+    }
+    init()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  async function loadCriteria() {
+  async function loadCriteria(tagId?: string | null) {
     setLoading(true)
-    const { data } = await supabase
+    let q = supabase
       .from('criteria')
       .select('*, sub_criteria(id, title, description, max_marks, order_index, criteria_id, allowed_marks)')
       .order('order_index')
+    if (tagId) q = q.eq('tag_id', tagId)
+    const { data } = await q
 
     if (data) {
       setCriteria(
@@ -106,6 +122,7 @@ export default function RubricsPage() {
           order_index: i,
           project_type: crit.project_type,
           allowed_marks: crit.allowed_marks,
+          ...(isNew && callerTagId ? { tag_id: callerTagId } : {}),
         }
 
         if (isNew) {

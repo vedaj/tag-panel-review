@@ -2,6 +2,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { Profile } from '@/types/database'
+import type { AdminScope } from '@/app/actions/scope'
 import {
   GraduationCap,
   LayoutDashboard,
@@ -10,38 +11,47 @@ import {
   BookOpen,
   FileText,
   Users as UsersIcon,
+  Building2,
   X,
 } from 'lucide-react'
 
 interface NavItem {
   label: string
-  caption: string
   href: string
   icon: React.ElementType
   adminOnly?: boolean
+  institutionOnly?: boolean
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard', caption: 'Overview of your groups', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'Analytics', caption: 'Performance insights', href: '/analytics', icon: BarChart2 },
-  { label: 'Import Data', caption: 'Upload student data', href: '/admin/import', icon: Upload, adminOnly: true },
-  { label: 'Rubrics', caption: 'Manage grading criteria', href: '/admin/rubrics', icon: BookOpen, adminOnly: true },
-  { label: 'Report', caption: 'Download grade report', href: '/admin/report', icon: FileText, adminOnly: true },
-  { label: 'Users', caption: 'Manage faculty accounts', href: '/admin/users', icon: UsersIcon, adminOnly: true },
+  { label: 'Dashboard',   href: '/dashboard',        icon: LayoutDashboard },
+  { label: 'Analytics',   href: '/analytics',         icon: BarChart2 },
+  { label: 'Import Data', href: '/admin/import',      icon: Upload,     adminOnly: true },
+  { label: 'Rubrics',     href: '/admin/rubrics',     icon: BookOpen,   adminOnly: true },
+  { label: 'Report',      href: '/admin/report',      icon: FileText,   adminOnly: true },
+  { label: 'Users',       href: '/admin/users',       icon: UsersIcon,  adminOnly: true },
+  { label: 'All TAGs',    href: '/admin/institution', icon: Building2,  institutionOnly: true },
 ]
 
 interface SidebarProps {
   profile: Profile | null
   open: boolean
   mobileOpen: boolean
+  adminScope: AdminScope
   onMobileToggle: () => void
   onMobileClose: () => void
 }
 
-export function Sidebar({ profile, open, mobileOpen, onMobileClose }: SidebarProps) {
+export function Sidebar({ profile, open, mobileOpen, onMobileClose, adminScope }: SidebarProps) {
   const pathname = usePathname()
-  const isAdmin = profile?.role === 'admin'
-  const visibleItems = navItems.filter((item) => !item.adminOnly || isAdmin)
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'institution_admin'
+  const isInstitutionAdmin = profile?.role === 'institution_admin'
+
+  const visibleItems = navItems.filter((item) => {
+    if (item.institutionOnly) return isInstitutionAdmin
+    if (item.adminOnly) return isAdmin
+    return true
+  })
 
   const NavLinks = ({ onNav, forceOpen }: { onNav?: () => void; forceOpen?: boolean }) => (
     <div className="nav-group">
@@ -66,6 +76,10 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose }: SidebarPro
     </div>
   )
 
+  const tagLabel = profile?.tag
+    ? (profile.tag as { short_name: string }).short_name
+    : null
+
   return (
     <>
       {/* Desktop sidebar */}
@@ -84,7 +98,13 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose }: SidebarPro
           {open && (
             <div style={{ minWidth: 0 }}>
               <h2 className="brand-mark">TAG Panel Review</h2>
-              <p className="brand-caption">Data Science TAG</p>
+              <p className="brand-caption">
+                {isInstitutionAdmin && adminScope === 'institution'
+                  ? 'All TAGs'
+                  : tagLabel
+                    ? `${tagLabel} TAG`
+                    : 'Data Science TAG'}
+              </p>
             </div>
           )}
         </div>
@@ -119,7 +139,13 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose }: SidebarPro
                 </span>
                 <div>
                   <h2 className="brand-mark">TAG Panel Review</h2>
-                  <p className="brand-caption">Data Science TAG</p>
+                  <p className="brand-caption">
+                    {isInstitutionAdmin && adminScope === 'institution'
+                      ? 'All TAGs'
+                      : tagLabel
+                        ? `${tagLabel} TAG`
+                        : 'Data Science TAG'}
+                  </p>
                 </div>
               </div>
               <button

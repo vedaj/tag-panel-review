@@ -1,4 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { effectiveTagFilter } from '@/lib/admin-scope'
 import Link from 'next/link'
 import { ClipboardList, Users, CheckCircle2, ChevronRight } from 'lucide-react'
 
@@ -43,15 +44,16 @@ export default async function DashboardPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('*')
+    .select('*, tag:tags(*)')
     .eq('id', user!.id)
     .single()
 
-  const isAdmin = profile?.role === 'admin'
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'institution_admin'
+  const tagId = await effectiveTagFilter(profile)
 
-  const { data: groupsRaw } = await supabase
-    .from('groups')
-    .select(`*, students(id, name, roll_number)`)
+  let groupsQuery = supabase.from('groups').select(`*, students(id, name, roll_number)`)
+  if (tagId) groupsQuery = groupsQuery.eq('tag_id', tagId)
+  const { data: groupsRaw } = await groupsQuery
 
   // Natural / numeric sort: "Team 2" before "Team 10"
   const groups = (groupsRaw ?? []).sort((a, b) =>
@@ -76,6 +78,12 @@ export default async function DashboardPage() {
     return ids.length > 0 && ids.every((id: string) => gradedStudentIds.has(id))
   })
 
+  const scopeLabel = profile?.role === 'institution_admin' && !tagId
+    ? 'All TAGs — institution view'
+    : isAdmin
+      ? `${(profile?.tag as { short_name?: string } | null)?.short_name ?? ''} TAG — admin view`
+      : 'Groups you\'re reviewing'
+
   return (
     <>
       {/* Top bar */}
@@ -84,9 +92,7 @@ export default async function DashboardPage() {
         <h1 className="section-title" style={{ marginTop: 6 }}>
           Welcome, {profile?.name}
         </h1>
-        <p className="section-subtitle">
-          {isAdmin ? 'Admin view — all groups' : 'Groups you\'re reviewing'}
-        </p>
+        <p className="section-subtitle">{scopeLabel}</p>
       </div>
 
       {/* Stats */}
