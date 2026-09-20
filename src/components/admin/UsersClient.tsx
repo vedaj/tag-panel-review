@@ -4,9 +4,15 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { UserPlus, KeyRound, Trash2, Shield, User, X, Loader2, ChevronDown, Building2, ArrowRightLeft } from 'lucide-react'
+import { UserPlus, KeyRound, Trash2, Shield, User, X, Loader2, ChevronDown, Building2, ArrowRightLeft, ShieldCheck } from 'lucide-react'
 import type { UserRow, TagOption } from '@/app/(dashboard)/admin/users/page'
 import type { Role } from '@/types/database'
+
+const ROLE_OPTIONS: { value: Role; label: string; description: string }[] = [
+  { value: 'faculty', label: 'Faculty', description: 'Can grade assigned groups and view their own analytics.' },
+  { value: 'admin', label: 'TAG Admin', description: 'Manages users, groups, and rubrics within their TAG.' },
+  { value: 'institution_admin', label: 'Institution Admin', description: 'Full institution-wide access across all TAGs.' },
+]
 
 function formatDate(iso: string | null) {
   if (!iso) return '—'
@@ -85,11 +91,18 @@ export function UsersClient({
   const [pwdUser, setPwdUser] = useState<UserRow | null>(null)
   const [moveUser, setMoveUser] = useState<UserRow | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null)
+  const [roleUser, setRoleUser] = useState<UserRow | null>(null)
+  const [selectedRole, setSelectedRole] = useState<Role>('faculty')
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const createFormRef = useRef<HTMLFormElement>(null)
   const pwdFormRef = useRef<HTMLFormElement>(null)
   const moveFormRef = useRef<HTMLFormElement>(null)
+
+  function openRoleModal(u: UserRow) {
+    setSelectedRole(u.role as Role)
+    setRoleUser(u)
+  }
 
   function flash(msg: string, type: 'ok' | 'err') {
     if (type === 'ok') { setSuccess(msg); setError(null) }
@@ -183,9 +196,7 @@ export function UsersClient({
                       user={u}
                       isMe={isMe}
                       isPending={isPending}
-                      isInstitutionAdmin={isInstitutionAdmin}
-                      updateRole={updateRole}
-                      act={act}
+                      onChangeRole={() => openRoleModal(u)}
                     />
                   </td>
                   <td style={{ padding: '10px 14px', fontSize: '0.78rem', color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap' }}>
@@ -357,37 +368,80 @@ export function UsersClient({
           </div>
         </Modal>
       )}
+
+      {/* Change role modal */}
+      {roleUser && (
+        <Modal title={`Change Role — ${roleUser.name || roleUser.email}`} onClose={() => setRoleUser(null)}>
+          <p style={{ fontSize: '0.83rem', color: 'hsl(var(--muted-foreground))', marginBottom: 16 }}>
+            Select the role to assign to this user.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 20 }}>
+            {ROLE_OPTIONS.filter((r) => isInstitutionAdmin || r.value !== 'institution_admin').map((opt) => {
+              const active = selectedRole === opt.value
+              return (
+                <label
+                  key={opt.value}
+                  style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 12,
+                    padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
+                    border: `1.5px solid ${active ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
+                    background: active ? 'hsl(var(--primary) / 0.06)' : 'hsl(var(--card))',
+                    transition: 'all 120ms ease',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="role"
+                    value={opt.value}
+                    checked={active}
+                    onChange={() => setSelectedRole(opt.value)}
+                    style={{ marginTop: 3, accentColor: 'hsl(var(--primary))' }}
+                  />
+                  <div>
+                    <div style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--app-hero-text)', marginBottom: 2 }}>
+                      {opt.label}
+                    </div>
+                    <div style={{ fontSize: '0.76rem', color: 'hsl(var(--muted-foreground))', lineHeight: 1.4 }}>
+                      {opt.description}
+                    </div>
+                  </div>
+                </label>
+              )
+            })}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <Button
+              className="flex-1 gap-2"
+              disabled={isPending || selectedRole === roleUser.role}
+              onClick={() => {
+                const fd = new FormData()
+                fd.append('userId', roleUser.id)
+                fd.append('role', selectedRole)
+                act(async () => { await updateRole(fd) }, `${roleUser.name || roleUser.email} is now ${selectedRole}`)
+                setRoleUser(null)
+              }}
+            >
+              {isPending
+                ? <><Loader2 size={14} className="animate-spin" /> Saving…</>
+                : <><ShieldCheck size={14} /> Assign Role</>
+              }
+            </Button>
+            <Button variant="outline" onClick={() => setRoleUser(null)}>Cancel</Button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
 
-function RolePill({ user, isMe, isPending, isInstitutionAdmin, updateRole, act }: {
+function RolePill({ user, isMe, isPending, onChangeRole }: {
   user: UserRow
   isMe: boolean
   isPending: boolean
-  isInstitutionAdmin: boolean
-  updateRole: (fd: FormData) => Promise<void>
-  act: (fn: () => Promise<void>, msg: string) => void
+  onChangeRole: () => void
 }) {
   const isInstAdmin = user.role === 'institution_admin'
   const isTagAdmin = user.role === 'admin'
-
-  function cycleRole() {
-    let newRole: Role
-    if (isInstitutionAdmin) {
-      // cycle: faculty → admin → institution_admin → faculty
-      if (user.role === 'faculty') newRole = 'admin'
-      else if (user.role === 'admin') newRole = 'institution_admin'
-      else newRole = 'faculty'
-    } else {
-      newRole = isTagAdmin ? 'faculty' : 'admin'
-    }
-    const fd = new FormData()
-    fd.append('userId', user.id)
-    fd.append('role', newRole)
-    act(async () => { await updateRole(fd) }, `${user.name || user.email} is now ${newRole}`)
-  }
-
   const label = isInstAdmin ? 'Institution Admin' : isTagAdmin ? 'TAG Admin' : 'Faculty'
   const icon = isInstAdmin ? <Building2 size={11} /> : isTagAdmin ? <Shield size={11} /> : <User size={11} />
   const accent = isInstAdmin
@@ -398,19 +452,17 @@ function RolePill({ user, isMe, isPending, isInstitutionAdmin, updateRole, act }
 
   return (
     <button
-      onClick={cycleRole}
+      onClick={onChangeRole}
       disabled={isPending || isMe}
-      title={isMe ? 'Cannot change your own role' : `Click to cycle role`}
+      title={isMe ? 'Cannot change your own role' : 'Change role'}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 5,
         padding: '4px 10px', borderRadius: 999, fontSize: '0.72rem', fontWeight: 700,
         border: `1px solid ${accent.border}`,
-        background: accent.bg,
-        color: accent.color,
+        background: accent.bg, color: accent.color,
         cursor: isMe ? 'default' : 'pointer',
         opacity: isPending ? 0.5 : 1,
-        transition: 'all 140ms ease',
-        whiteSpace: 'nowrap',
+        transition: 'all 140ms ease', whiteSpace: 'nowrap',
       }}
     >
       {icon}
