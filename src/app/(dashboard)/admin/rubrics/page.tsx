@@ -82,20 +82,20 @@ export default function RubricsPage() {
   }
 
   function addCriteria() {
-    const tempId = `new-${Date.now()}`
+    const id = crypto.randomUUID()
     setCriteria((prev) => [
       ...prev,
-      { id: tempId, title: '', description: '', max_marks: 10, order_index: prev.length, project_type: 'all', allowed_marks: '', created_at: '', sub_criteria: [] },
+      { id, title: '', description: '', max_marks: 10, order_index: prev.length, project_type: 'all', allowed_marks: '', created_at: '', sub_criteria: [] },
     ])
-    setExpanded((prev) => new Set([...prev, tempId]))
+    setExpanded((prev) => new Set([...prev, id]))
   }
 
   function addSubCriteria(criteriaId: string) {
-    const tempId = `new-sub-${Date.now()}`
+    const id = crypto.randomUUID()
     setCriteria((prev) =>
       prev.map((c) =>
         c.id === criteriaId
-          ? { ...c, sub_criteria: [...c.sub_criteria, { id: tempId, criteria_id: criteriaId, title: '', description: '', max_marks: 5, order_index: c.sub_criteria.length, allowed_marks: '', created_at: '' }] }
+          ? { ...c, sub_criteria: [...c.sub_criteria, { id, criteria_id: criteriaId, title: '', description: '', max_marks: 5, order_index: c.sub_criteria.length, allowed_marks: '', created_at: '' }] }
           : c
       )
     )
@@ -105,56 +105,65 @@ export default function RubricsPage() {
     setSaving(true)
     setSavedMsg('')
     try {
-      const { data: existingCriteria } = await supabase.from('criteria').select('id')
-      const dbIds = existingCriteria?.map((c: { id: string }) => c.id) ?? []
-      const toDelete = dbIds.filter((id: string) => !criteria.map((c) => c.id).includes(id))
-      if (toDelete.length > 0) await supabase.from('criteria').delete().in('id', toDelete)
+      // 1. Fetch current DB IDs
+      const [{ data: dbCriteria }, { data: dbSubs }] = await Promise.all([
+        supabase.from('criteria').select('id'),
+        supabase.from('sub_criteria').select('id'),
+      ])
+      const dbCriteriaIds = new Set((dbCriteria ?? []).map((c: { id: string }) => c.id))
+      const dbSubIds = new Set((dbSubs ?? []).map((s: { id: string }) => s.id))
 
-      for (let i = 0; i < criteria.length; i++) {
-        const crit = criteria[i]
-        const isNew = crit.id.startsWith('new-')
-        let criteriaId = crit.id
+      const currentCriteriaIds = new Set(criteria.map((c) => c.id))
+      const currentSubIds = new Set(criteria.flatMap((c) => c.sub_criteria.map((s) => s.id)))
 
-        const critPayload = {
-          title: crit.title,
-          description: crit.description,
-          max_marks: crit.max_marks,
-          order_index: i,
-          project_type: crit.project_type,
-          allowed_marks: crit.allowed_marks,
-          ...(isNew && callerTagId ? { tag_id: callerTagId } : {}),
-        }
+      // 2. Delete removed rows (sub_criteria cascade from criteria deletes)
+      const criteriaToDelete = [...dbCriteriaIds].filter((id) => !currentCriteriaIds.has(id))
+      const subsToDelete = [...dbSubIds].filter((id) => !currentSubIds.has(id))
 
-        if (isNew) {
-          const { data, error } = await supabase.from('criteria').insert(critPayload).select('id').single()
-          if (error || !data) continue
-          criteriaId = data.id
-        } else {
-          await supabase.from('criteria').update(critPayload).eq('id', criteriaId)
-        }
+      await Promise.all([
+        criteriaToDelete.length > 0
+          ? supabase.from('criteria').delete().in('id', criteriaToDelete)
+          : Promise.resolve(),
+        subsToDelete.length > 0
+          ? supabase.from('sub_criteria').delete().in('id', subsToDelete)
+          : Promise.resolve(),
+      ])
 
-        const { data: existingSubs } = await supabase.from('sub_criteria').select('id').eq('criteria_id', criteriaId)
-        const existingSubIds = existingSubs?.map((s: { id: string }) => s.id) ?? []
-        const currentSubIds = crit.sub_criteria.filter((s) => !s.id.startsWith('new-sub-')).map((s) => s.id)
-        const toDeleteSubs = existingSubIds.filter((id: string) => !currentSubIds.includes(id))
-        if (toDeleteSubs.length > 0) await supabase.from('sub_criteria').delete().in('id', toDeleteSubs)
+      // 3. Batch upsert all criteria
+      const criteriaRows = criteria.map((c, i) => ({
+        id: c.id,
+        title: c.title,
+        description: c.description,
+        max_marks: c.max_marks,
+        order_index: i,
+        project_type: c.project_type,
+        allowed_marks: c.allowed_marks,
+        ...(callerTagId && !dbCriteriaIds.has(c.id) ? { tag_id: callerTagId } : {}),
+      }))
+      if (criteriaRows.length > 0) {
+        const { error } = await supabase
+          .from('criteria')
+          .upsert(criteriaRows, { onConflict: 'id' })
+        if (error) throw error
+      }
 
-        for (let j = 0; j < crit.sub_criteria.length; j++) {
-          const sub = crit.sub_criteria[j]
-          const subPayload = {
-            criteria_id: criteriaId,
-            title: sub.title,
-            description: sub.description,
-            max_marks: sub.max_marks,
-            order_index: j,
-            allowed_marks: sub.allowed_marks,
-          }
-          if (sub.id.startsWith('new-sub-')) {
-            await supabase.from('sub_criteria').insert(subPayload)
-          } else {
-            await supabase.from('sub_criteria').update(subPayload).eq('id', sub.id)
-          }
-        }
+      // 4. Batch upsert all sub-criteria
+      const subRows = criteria.flatMap((c, _i) =>
+        c.sub_criteria.map((s, j) => ({
+          id: s.id,
+          criteria_id: c.id,
+          title: s.title,
+          description: s.description,
+          max_marks: s.max_marks,
+          order_index: j,
+          allowed_marks: s.allowed_marks,
+        }))
+      )
+      if (subRows.length > 0) {
+        const { error } = await supabase
+          .from('sub_criteria')
+          .upsert(subRows, { onConflict: 'id' })
+        if (error) throw error
       }
 
       await loadCriteria()
