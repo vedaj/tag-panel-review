@@ -21,6 +21,20 @@ export default async function GradePage({ params }: Props) {
     .eq('id', user.id)
     .single()
 
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'institution_admin'
+
+  // Non-admins must be assigned to this group via panel_assignments
+  if (!isAdmin) {
+    const { data: assignment } = await supabase
+      .from('panel_assignments')
+      .select('id')
+      .eq('faculty_id', user.id)
+      .eq('group_id', groupId)
+      .maybeSingle()
+
+    if (!assignment) notFound()
+  }
+
   // Fetch group with students
   const { data: group } = await supabase
     .from('groups')
@@ -75,7 +89,7 @@ export default async function GradePage({ params }: Props) {
       existingGrades={existingGrades ?? []}
       existingFeedback={existingFeedback ?? []}
       facultyId={user.id}
-      isAdmin={profile?.role === 'admin'}
+      isAdmin={isAdmin}
     />
   )
 }
