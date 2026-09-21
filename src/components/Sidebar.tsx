@@ -44,12 +44,12 @@ interface SidebarProps {
 
 export function Sidebar({ profile, open, mobileOpen, onMobileClose, adminScope }: SidebarProps) {
   const pathname = usePathname()
-  const isAdmin = profile?.role === 'admin' || profile?.role === 'institution_admin'
+  const isTagAdmin = profile?.role === 'admin'
   const isInstitutionAdmin = profile?.role === 'institution_admin'
 
   const visibleItems = navItems.filter((item) => {
     if (item.institutionOnly) return isInstitutionAdmin
-    if (item.adminOnly) return isAdmin
+    if (item.adminOnly) return isTagAdmin
     return true
   })
 
