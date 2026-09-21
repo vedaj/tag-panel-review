@@ -123,36 +123,59 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
     setSaving(true)
     setError(null)
     try {
-      const studentIds = students.map((s) => s.id)
+      // Classify every cell as non-zero (upsert) or zero (delete).
+      // Upsert first so grades are never absent from the DB mid-save.
+      // If the upsert fails, the old rows are still intact.
+      const upsertRows: { faculty_id: string; student_id: string; criteria_id: string; sub_criteria_id: string | null; marks: number }[] = []
+      const zeroKeys: { studentId: string; criteriaId: string; subId: string | null }[] = []
 
-      // Delete all existing grades for this faculty+group, then re-insert
-      // only non-zero rows — ensures a blank save never marks as evaluated
-      if (studentIds.length > 0) {
-        const { error: delErr } = await supabase
-          .from('grades')
-          .delete()
-          .eq('faculty_id', facultyId)
-          .in('student_id', studentIds)
-        if (delErr) throw delErr
-      }
-
-      const nonZeroRows = []
       for (const student of students) {
         for (const crit of visibleCriteria) {
           if (crit.sub_criteria.length > 0) {
             for (const sub of crit.sub_criteria) {
               const marks = getGrade(student.id, crit.id, sub.id)
-              if (marks > 0) nonZeroRows.push({ faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: sub.id, marks })
+              if (marks > 0) {
+                upsertRows.push({ faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: sub.id, marks })
+              } else {
+                zeroKeys.push({ studentId: student.id, criteriaId: crit.id, subId: sub.id })
+              }
             }
           } else {
             const marks = getGrade(student.id, crit.id, null)
-            if (marks > 0) nonZeroRows.push({ faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: null, marks })
+            if (marks > 0) {
+              upsertRows.push({ faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: null, marks })
+            } else {
+              zeroKeys.push({ studentId: student.id, criteriaId: crit.id, subId: null })
+            }
           }
         }
       }
-      if (nonZeroRows.length > 0) {
-        const { error: gradesErr } = await supabase.from('grades').insert(nonZeroRows)
+
+      if (upsertRows.length > 0) {
+        const { error: gradesErr } = await supabase
+          .from('grades')
+          .upsert(upsertRows, { onConflict: 'faculty_id,student_id,criteria_id,sub_criteria_id' })
         if (gradesErr) throw gradesErr
+      }
+
+      // After the upsert lands, remove any rows that are now zero.
+      // Fetch existing IDs and batch-delete stale ones in one call.
+      const studentIds = students.map((s) => s.id)
+      if (studentIds.length > 0) {
+        const upsertedKeys = new Set(
+          upsertRows.map((r) => `${r.student_id}:${r.criteria_id}:${r.sub_criteria_id ?? 'null'}`)
+        )
+        const { data: existing } = await supabase
+          .from('grades')
+          .select('id, student_id, criteria_id, sub_criteria_id')
+          .eq('faculty_id', facultyId)
+          .in('student_id', studentIds)
+        const staleIds = (existing ?? [])
+          .filter((g) => !upsertedKeys.has(`${g.student_id}:${g.criteria_id}:${g.sub_criteria_id ?? 'null'}`))
+          .map((g) => g.id)
+        if (staleIds.length > 0) {
+          await supabase.from('grades').delete().in('id', staleIds)
+        }
       }
 
       const titleRes = await fetch('/api/group/update-title', {
