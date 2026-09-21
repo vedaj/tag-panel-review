@@ -63,15 +63,44 @@ export default function ReportPage() {
   }
 
   async function fetchAll(): Promise<ReportData> {
-    const [{ data: groups }, { data: students }, { data: faculty }, { data: criteria }, { data: grades }, { data: feedback }] =
-      await Promise.all([
-        supabase.from('groups').select('*').order('name'),
-        supabase.from('students').select('*'),
-        supabase.from('profiles').select('*'),
-        supabase.from('criteria').select('*, sub_criteria(*)').order('order_index'),
-        supabase.from('grades').select('*').limit(100000),
-        supabase.from('feedback').select('*').limit(100000),
-      ])
+    const { data: { user } } = await supabase.auth.getUser()
+    let tagId: string | null = null
+    if (user) {
+      const { data: profile } = await supabase.from('profiles').select('tag_id, role').eq('id', user.id).single()
+      if (profile?.role !== 'institution_admin') tagId = profile?.tag_id ?? null
+    }
+
+    let groupsQ = supabase.from('groups').select('*').order('name')
+    let facultyQ = supabase.from('profiles').select('*')
+    let criteriaQ = supabase.from('criteria').select('*, sub_criteria(*)').order('order_index')
+    if (tagId) {
+      groupsQ = groupsQ.eq('tag_id', tagId)
+      facultyQ = facultyQ.eq('tag_id', tagId)
+      criteriaQ = criteriaQ.eq('tag_id', tagId)
+    }
+
+    const [{ data: groups }, { data: faculty }, { data: criteria }] = await Promise.all([
+      groupsQ,
+      facultyQ,
+      criteriaQ,
+    ])
+
+    const groupIds = (groups ?? []).map((g: { id: string }) => g.id)
+
+    const { data: students } = groupIds.length > 0
+      ? await supabase.from('students').select('*').in('group_id', groupIds)
+      : { data: [] }
+
+    const studentIds = (students ?? []).map((s: { id: string }) => s.id)
+
+    const [{ data: grades }, { data: feedback }] = await Promise.all([
+      studentIds.length > 0
+        ? supabase.from('grades').select('*').in('student_id', studentIds).limit(100000)
+        : Promise.resolve({ data: [] }),
+      groupIds.length > 0
+        ? supabase.from('feedback').select('*').in('group_id', groupIds).limit(100000)
+        : Promise.resolve({ data: [] }),
+    ])
     const sortedCriteria = (criteria ?? []).map((c) => ({
       ...c,
       sub_criteria: (c.sub_criteria ?? []).sort(
