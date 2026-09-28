@@ -269,7 +269,7 @@ export function GuideSheetClient({ group, criteria, existingGrades, existingFeed
             <AlertTriangle size={16} style={{ color: '#16a34a', marginTop: 1, flexShrink: 0 }} />
             <div style={{ flex: 1 }}>
               <p style={{ margin: '0 0 10px', fontSize: '0.85rem', color: '#14532d', fontWeight: 500 }}>
-                This will mark {group.name} as approved and queue it for panel review. Save your marks first if you haven't.
+                This will mark {group.name} as approved and queue it for panel review. Save your marks first if you haven&apos;t.
               </p>
               <div style={{ display: 'flex', gap: 8 }}>
                 <Button
