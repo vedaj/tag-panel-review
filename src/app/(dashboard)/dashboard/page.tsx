@@ -2,17 +2,43 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { effectiveTagFilter } from '@/lib/admin-scope'
 import Link from 'next/link'
-import { ClipboardList, Users, CheckCircle2, ChevronRight, Building2, GraduationCap, TrendingUp, BookOpen, Clock } from 'lucide-react'
+import { ClipboardList, Users, CheckCircle2, XCircle, ChevronRight, Building2, GraduationCap, TrendingUp, BookOpen, Clock } from 'lucide-react'
 
-function GroupCard({ group, gradedStudentIds }: {
-  group: { id: string; name: string; project_title?: string; students?: { id: string; name: string }[] }
+function ApprovalBadge({ approved }: { approved: boolean }) {
+  return approved ? (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '2px 8px', borderRadius: 999,
+      background: '#f0fdf4', color: '#16a34a',
+      border: '1px solid #bbf7d0',
+      fontSize: '0.7rem', fontWeight: 600, flexShrink: 0,
+    }}>
+      <CheckCircle2 size={11} />Guide approved
+    </span>
+  ) : (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '2px 8px', borderRadius: 999,
+      background: '#fef2f2', color: '#dc2626',
+      border: '1px solid #fecaca',
+      fontSize: '0.7rem', fontWeight: 600, flexShrink: 0,
+    }}>
+      <XCircle size={11} />Pending guide
+    </span>
+  )
+}
+
+function GroupCard({ group, gradedStudentIds, guideApproved }: {
+  group: { id: string; name: string; project_title?: string; students?: { id: string; name: string }[]; guide_approval_status?: string }
   gradedStudentIds: Set<string>
+  guideApproved?: boolean
 }) {
   const studentIds = group.students?.map((s) => s.id) ?? []
   const gradedCount = studentIds.filter((id) => gradedStudentIds.has(id)).length
   const total = studentIds.length
   const done = gradedCount === total && total > 0
   const pct = total > 0 ? (gradedCount / total) * 100 : 0
+  const showApproval = guideApproved !== undefined
 
   return (
     <Link href={`/grade/${group.id}`} className="group-card">
@@ -25,9 +51,12 @@ function GroupCard({ group, gradedStudentIds }: {
       {group.project_title && (
         <p className="group-card-title">{group.project_title}</p>
       )}
-      <div className="group-card-meta">
-        <Users size={13} />
-        {total} student{total !== 1 ? 's' : ''}
+      <div className="group-card-meta" style={{ justifyContent: 'space-between' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <Users size={13} />
+          {total} student{total !== 1 ? 's' : ''}
+        </span>
+        {showApproval && <ApprovalBadge approved={guideApproved!} />}
       </div>
       <div className="group-progress-row">
         <div className="group-progress-bar">
@@ -353,7 +382,7 @@ export default async function DashboardPage() {
                 </span>
               </h2>
               <div className="group-grid">
-                {panelPendingGroups.map((group) => <GroupCard key={group.id} group={group} gradedStudentIds={panelGradedIds} />)}
+                {panelPendingGroups.map((group) => <GroupCard key={group.id} group={group} gradedStudentIds={panelGradedIds} guideApproved={true} />)}
               </div>
             </div>
           )}
@@ -368,7 +397,7 @@ export default async function DashboardPage() {
                 </span>
               </h2>
               <div className="group-grid">
-                {panelCompletedGroups.map((group) => <GroupCard key={group.id} group={group} gradedStudentIds={panelGradedIds} />)}
+                {panelCompletedGroups.map((group) => <GroupCard key={group.id} group={group} gradedStudentIds={panelGradedIds} guideApproved={true} />)}
               </div>
             </div>
           )}
@@ -385,13 +414,16 @@ export default async function DashboardPage() {
               </h2>
               <div className="group-grid">
                 {pendingApprovalGroups.map((group) => (
-                  <div key={group.id} className="group-card" style={{ opacity: 0.6, cursor: 'default' }}>
+                  <div key={group.id} className="group-card" style={{ opacity: 0.55, cursor: 'default' }}>
                     <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                       <span className="group-card-name">{group.name}</span>
-                      <span className="group-badge" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>Awaiting guide</span>
+                      <span className={`group-badge`}>{group.students?.length ?? 0} students</span>
                     </div>
                     {group.project_title && <p className="group-card-title">{group.project_title}</p>}
-                    <div className="group-card-meta"><Users size={13} />{group.students?.length ?? 0} students</div>
+                    <div className="group-card-meta" style={{ justifyContent: 'space-between' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Users size={13} />{group.students?.length ?? 0} student{(group.students?.length ?? 0) !== 1 ? 's' : ''}</span>
+                      <ApprovalBadge approved={false} />
+                    </div>
                   </div>
                 ))}
               </div>
