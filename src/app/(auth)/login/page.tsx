@@ -37,7 +37,7 @@ export default function LoginPage() {
           TAG Panel Review
         </h1>
         <p className="hero-copy">
-          Data Science TAG · Dept. of Computer Science &amp; Engineering<br />
+          Dept. of Computer Science &amp; Engineering<br />
           School of Computing, Amrita Vishwa Vidyapeetham
         </p>
 
