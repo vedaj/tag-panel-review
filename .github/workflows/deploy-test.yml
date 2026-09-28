@@ -32,7 +32,6 @@ jobs:
         run: |
           URL=$(npx vercel deploy --prod \
             --token=${{ secrets.VERCEL_TOKEN }} \
-            --scope=${{ secrets.VERCEL_ORG_ID }} \
             --yes \
             --env NEXT_PUBLIC_SUPABASE_URL="${{ secrets.TEST_SUPABASE_URL }}" \
             --env NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.TEST_SUPABASE_ANON_KEY }}" \
