@@ -1,0 +1,41 @@
+name: Deploy to test environment
+
+on:
+  push:
+    branches:
+      - 'feature/**'
+      - 'fix/**'
+      - 'dev/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: test
+      url: https://dev-reviewarc.csamrita.org
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Deploy to test
+        id: deploy
+        run: |
+          URL=$(npx vercel deploy --prod \
+            --token=${{ secrets.VERCEL_TOKEN }} \
+            --scope=${{ secrets.VERCEL_ORG_ID }} \
+            --yes \
+            --env NEXT_PUBLIC_SUPABASE_URL="${{ secrets.TEST_SUPABASE_URL }}" \
+            --env NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.TEST_SUPABASE_ANON_KEY }}" \
+            --env SUPABASE_SERVICE_ROLE_KEY="${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}" \
+            --project-id=${{ secrets.VERCEL_TEST_PROJECT_ID }})
+          echo "url=$URL" >> $GITHUB_OUTPUT
