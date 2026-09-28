@@ -1,15 +1,16 @@
 'use client'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase'
-import { generateAllReport, generateProjectTypeReport, generateAuditReport, downloadBlob, type ProjectType, type ReportData } from '@/lib/excel'
+import { generateAllReport, generateProjectTypeReport, generateAuditReport, generateGuideReport, generatePanelReport, generateCombinedGuidePanel, downloadBlob, type ProjectType, type ReportData } from '@/lib/excel'
 import type { Group, Student, Profile, Criteria, Grade, Feedback } from '@/types/database'
 import { Button } from '@/components/ui/button'
 import {
   FileDown, Loader2, RefreshCw, Users, CheckCircle2,
   Microscope, AppWindow, Code2, Layers, Trash2, AlertTriangle, ShieldCheck,
+  BookOpen, ClipboardList, BookMarked,
 } from 'lucide-react'
 
-type DownloadKey = ProjectType | 'all' | 'audit'
+type DownloadKey = ProjectType | 'all' | 'audit' | 'guide' | 'panel' | 'combined'
 
 interface Stats {
   groups: Group[]
@@ -126,6 +127,12 @@ export default function ReportPage() {
         downloadBlob(generateAllReport(data), `TAG_All_Projects_${date}.xlsx`)
       } else if (key === 'audit') {
         downloadBlob(generateAuditReport(data), `TAG_Audit_${date}.xlsx`)
+      } else if (key === 'guide') {
+        downloadBlob(generateGuideReport(data), `TAG_Guide_Marks_${date}.xlsx`)
+      } else if (key === 'panel') {
+        downloadBlob(generatePanelReport(data), `TAG_Panel_Marks_${date}.xlsx`)
+      } else if (key === 'combined') {
+        downloadBlob(generateCombinedGuidePanel(data), `TAG_Combined_Report_${date}.xlsx`)
       } else {
         downloadBlob(generateProjectTypeReport(data, key), `TAG_${key}_report_${date}.xlsx`)
       }
@@ -303,6 +310,45 @@ export default function ReportPage() {
                 ? <><Loader2 size={14} className="animate-spin" />Generating…</>
                 : <><FileDown size={14} />Download All</>}
             </button>
+          </div>
+        </div>
+
+        {/* ── Guide / Panel exports ── */}
+        <div style={{ border: '1px solid hsl(var(--border))', borderRadius: 'calc(var(--radius) * 1.6)', overflow: 'hidden', background: 'hsl(var(--card))', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}>
+          <div className="card-header-slate">
+            <span className="card-header-slate-title">
+              <BookMarked size={15} style={{ color: 'var(--brand-600)' }} />
+              Guide &amp; Panel Reports
+            </span>
+          </div>
+          <div style={{ padding: '18px 20px' }}>
+            <p style={{ margin: '0 0 14px', fontSize: '0.83rem', color: 'hsl(var(--muted-foreground))' }}>
+              Separate exports for guide review marks and panel review marks, plus a combined workbook with both sheets.
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+              {([
+                { key: 'guide',    label: 'Guide Marks',    sub: 'Guide rubrics only',          icon: <BookOpen size={13} />,      color: '#7c3aed' },
+                { key: 'panel',    label: 'Panel Marks',    sub: 'Panel rubrics, all groups',   icon: <ClipboardList size={13} />, color: '#0369a1' },
+                { key: 'combined', label: 'Combined Report', sub: 'Guide + Panel, two sheets',  icon: <Layers size={13} />,        color: '#065f46' },
+              ] as { key: DownloadKey; label: string; sub: string; icon: React.ReactNode; color: string }[]).map(({ key, label, sub, icon, color }) => (
+                <button
+                  key={key}
+                  onClick={() => handleDownload(key)}
+                  disabled={busy}
+                  className="download-card"
+                  style={{ opacity: busy && downloading !== key ? 0.5 : 1 }}
+                >
+                  <span className="download-card-label" style={{ color }}>
+                    {downloading === key ? <Loader2 size={13} className="animate-spin" /> : icon}
+                    {label}
+                  </span>
+                  <span className="download-card-sub">
+                    <FileDown size={12} />
+                    {downloading === key ? 'Generating…' : sub}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
