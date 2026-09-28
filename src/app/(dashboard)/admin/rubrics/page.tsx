@@ -85,7 +85,7 @@ export default function RubricsPage() {
     const id = crypto.randomUUID()
     setCriteria((prev) => [
       ...prev,
-      { id, title: '', description: '', max_marks: 10, order_index: prev.length, project_type: 'all', allowed_marks: '', created_at: '', sub_criteria: [] },
+      { id, title: '', description: '', max_marks: 10, order_index: prev.length, project_type: 'all', allowed_marks: '', review_type: 'panel', created_at: '', sub_criteria: [] },
     ])
     setExpanded((prev) => new Set([...prev, id]))
   }

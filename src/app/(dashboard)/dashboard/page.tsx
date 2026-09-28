@@ -2,7 +2,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { effectiveTagFilter } from '@/lib/admin-scope'
 import Link from 'next/link'
-import { ClipboardList, Users, CheckCircle2, ChevronRight, Building2, GraduationCap, TrendingUp } from 'lucide-react'
+import { ClipboardList, Users, CheckCircle2, ChevronRight, Building2, GraduationCap, TrendingUp, BookOpen, Clock } from 'lucide-react'
 
 function GroupCard({ group, gradedStudentIds }: {
   group: { id: string; name: string; project_title?: string; students?: { id: string; name: string }[] }
@@ -177,57 +177,100 @@ export default async function DashboardPage() {
     return <InstitutionDashboard name={profile.name ?? ''} tagCount={tags?.length ?? 0} />
   }
 
-  let groupsQuery = supabase.from('groups').select(`*, students(id, name, roll_number)`)
-  if (tagId) groupsQuery = groupsQuery.eq('tag_id', tagId)
-  const { data: groupsRaw } = await groupsQuery
-
-  // Natural / numeric sort: "Team 2" before "Team 10"
-  const groups = (groupsRaw ?? []).sort((a, b) =>
+  const numSort = (a: { name: string }, b: { name: string }) =>
     a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
-  )
 
-  const { data: myGrades } = await supabase
+  // Panel groups (from panel_assignments)
+  let panelGroupsQuery = supabase
+    .from('groups')
+    .select(`*, students(id, name, roll_number)`)
+  if (!isAdmin && tagId) panelGroupsQuery = panelGroupsQuery.eq('tag_id', tagId)
+  if (!isAdmin) {
+    // faculty: only groups they're assigned to
+    const { data: assignments } = await supabase
+      .from('panel_assignments')
+      .select('group_id')
+      .eq('faculty_id', user!.id)
+    const assignedIds = (assignments ?? []).map((a: { group_id: string }) => a.group_id)
+    if (assignedIds.length > 0) {
+      panelGroupsQuery = panelGroupsQuery.in('id', assignedIds)
+    } else if (!isAdmin) {
+      panelGroupsQuery = panelGroupsQuery.in('id', [])
+    }
+  } else if (tagId) {
+    panelGroupsQuery = panelGroupsQuery.eq('tag_id', tagId)
+  }
+  const { data: panelGroupsRaw } = await panelGroupsQuery
+  const panelGroups = (panelGroupsRaw ?? []).sort(numSort)
+
+  // Guide groups (where this user is guide1_id or guide2_id)
+  const { data: guideGroupsRaw } = await supabase
+    .from('groups')
+    .select(`*, students(id, name, roll_number)`)
+    .or(`guide1_id.eq.${user!.id},guide2_id.eq.${user!.id}`)
+  const guideGroups = (guideGroupsRaw ?? []).sort(numSort)
+  const isGuide = guideGroups.length > 0
+
+  const { data: myPanelGrades } = await supabase
     .from('grades')
-    .select('student_id')
+    .select('student_id, criteria_id')
     .eq('faculty_id', user!.id)
     .gt('marks', 0)
 
-  const gradedStudentIds = new Set(myGrades?.map((g) => g.student_id) ?? [])
-  const totalStudents = groups.reduce((sum, g) => sum + (g.students?.length ?? 0), 0)
+  const { data: guideGrades } = await supabase
+    .from('grades')
+    .select('student_id, criteria_id')
+    .eq('faculty_id', user!.id)
+    .gt('marks', 0)
 
-  const pendingGroups = groups.filter((g) => {
+  // Separate panel vs guide graded sets by criteria review_type
+  const { data: allCriteria } = await supabase.from('criteria').select('id, review_type')
+  const guideCriteriaIds = new Set((allCriteria ?? []).filter((c: { review_type: string }) => c.review_type === 'guide').map((c: { id: string }) => c.id))
+
+  const panelGradedIds = new Set(
+    (myPanelGrades ?? []).filter((g: { criteria_id: string }) => !guideCriteriaIds.has(g.criteria_id)).map((g: { student_id: string }) => g.student_id)
+  )
+  const guideGradedIds = new Set(
+    (guideGrades ?? []).filter((g: { criteria_id: string }) => guideCriteriaIds.has(g.criteria_id)).map((g: { student_id: string }) => g.student_id)
+  )
+
+  const totalStudents = panelGroups.reduce((sum, g) => sum + (g.students?.length ?? 0), 0)
+
+  // Panel queues split by guide approval
+  const approvedPanelGroups = panelGroups.filter((g) => g.guide_approval_status === 'approved')
+  const pendingApprovalGroups = panelGroups.filter((g) => g.guide_approval_status !== 'approved')
+
+  const panelPendingGroups = approvedPanelGroups.filter((g) => {
     const ids = g.students?.map((s: { id: string }) => s.id) ?? []
-    return ids.length === 0 || ids.some((id: string) => !gradedStudentIds.has(id))
+    return ids.length === 0 || ids.some((id: string) => !panelGradedIds.has(id))
   })
-  const completedGroups = groups.filter((g) => {
+  const panelCompletedGroups = approvedPanelGroups.filter((g) => {
     const ids = g.students?.map((s: { id: string }) => s.id) ?? []
-    return ids.length > 0 && ids.every((id: string) => gradedStudentIds.has(id))
+    return ids.length > 0 && ids.every((id: string) => panelGradedIds.has(id))
   })
 
-  const scopeLabel = profile?.role === 'institution_admin' && !tagId
-    ? 'All TAGs — institution view'
-    : isAdmin
-      ? `${(profile?.tag as { short_name?: string } | null)?.short_name ?? ''} TAG — admin view`
-      : 'Groups you\'re reviewing'
+  const scopeLabel = isAdmin
+    ? `${(profile?.tag as { short_name?: string } | null)?.short_name ?? ''} TAG — admin view`
+    : isGuide && panelGroups.length > 0
+      ? 'Guide & panel member'
+      : isGuide
+        ? 'Guide review'
+        : 'Panel review'
 
   return (
     <>
-      {/* Top bar */}
       <div className="dashboard-topbar">
         <p className="eyebrow">Dashboard</p>
-        <h1 className="section-title" style={{ marginTop: 6 }}>
-          Welcome, {profile?.name}
-        </h1>
+        <h1 className="section-title" style={{ marginTop: 6 }}>Welcome, {profile?.name}</h1>
         <p className="section-subtitle">{scopeLabel}</p>
       </div>
 
-      {/* Stats */}
       <div className="dashboard-section">
         <p className="eyebrow">At a glance</p>
         <div className="stat-grid">
           <div className="stat-card">
             <div className="stat-icon"><ClipboardList size={18} /></div>
-            <span className="stat-value">{groups?.length ?? 0}</span>
+            <span className="stat-value">{panelGroups.length + (isGuide ? guideGroups.length : 0)}</span>
             <span className="stat-label">Groups</span>
           </div>
           <div className="stat-card">
@@ -237,47 +280,129 @@ export default async function DashboardPage() {
           </div>
           <div className="stat-card">
             <div className="stat-icon"><CheckCircle2 size={18} /></div>
-            <span className="stat-value">{gradedStudentIds.size}</span>
-            <span className="stat-label">Graded</span>
+            <span className="stat-value">{panelGradedIds.size}</span>
+            <span className="stat-label">Panel Graded</span>
           </div>
+          {isGuide && (
+            <div className="stat-card">
+              <div className="stat-icon"><BookOpen size={18} /></div>
+              <span className="stat-value">{guideGroups.filter((g) => g.guide_approval_status === 'approved').length}/{guideGroups.length}</span>
+              <span className="stat-label">Guide Approved</span>
+            </div>
+          )}
         </div>
       </div>
 
-      {groups.length === 0 && (
-        <div className="dashboard-section">
-          <p className="section-subtitle">No groups found.</p>
-        </div>
+      {/* ── Guide section ── */}
+      {isGuide && (
+        <>
+          <div className="dashboard-section">
+            <p className="eyebrow">Guide review</p>
+            <h2 className="section-title" style={{ marginTop: 4, fontSize: '1.3rem' }}>
+              Your guide groups
+              <span style={{ marginLeft: 10, fontSize: '0.85rem', fontFamily: 'var(--body-font)', fontWeight: 500, color: 'var(--app-hero-subtext)', letterSpacing: 0 }}>
+                {guideGroups.length} group{guideGroups.length !== 1 ? 's' : ''}
+              </span>
+            </h2>
+            <div className="group-grid">
+              {guideGroups.map((group) => {
+                const ids = group.students?.map((s: { id: string }) => s.id) ?? []
+                const gradedCount = ids.filter((id: string) => guideGradedIds.has(id)).length
+                const approved = group.guide_approval_status === 'approved'
+                return (
+                  <Link key={group.id} href={`/guide/${group.id}`} className="group-card">
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                      <span className="group-card-name">{group.name}</span>
+                      <span className={`group-badge${approved ? ' done' : ''}`}>
+                        {approved ? 'Approved' : `${gradedCount}/${ids.length}`}
+                      </span>
+                    </div>
+                    {group.project_title && <p className="group-card-title">{group.project_title}</p>}
+                    <div className="group-card-meta" style={{ gap: 12 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Users size={13} />{ids.length} student{ids.length !== 1 ? 's' : ''}</span>
+                      {approved
+                        ? <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#16a34a', fontSize: '0.72rem', fontWeight: 600 }}><CheckCircle2 size={12} />Approved for panel</span>
+                        : <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'hsl(var(--muted-foreground))', fontSize: '0.72rem' }}><Clock size={12} />Pending approval</span>
+                      }
+                    </div>
+                    <div className="group-progress-row">
+                      <div className="group-progress-bar">
+                        <div className="group-progress-fill" style={{ width: `${ids.length > 0 ? (gradedCount / ids.length) * 100 : 0}%` }} />
+                      </div>
+                      <ChevronRight size={15} style={{ color: 'var(--app-hero-subtext)', flexShrink: 0 }} />
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        </>
       )}
 
-      {/* Yet to grade */}
-      {pendingGroups.length > 0 && (
-        <div className="dashboard-section">
-          <p className="eyebrow">Still to review</p>
-          <h2 className="section-title" style={{ marginTop: 4, fontSize: '1.3rem' }}>
-            Left to grade
-            <span style={{ marginLeft: 10, fontSize: '0.85rem', fontFamily: 'var(--body-font)', fontWeight: 500, color: 'var(--app-hero-subtext)', letterSpacing: 0 }}>
-              {pendingGroups.length} group{pendingGroups.length !== 1 ? 's' : ''}
-            </span>
-          </h2>
-          <div className="group-grid">
-            {pendingGroups.map((group) => <GroupCard key={group.id} group={group} gradedStudentIds={gradedStudentIds} />)}
-          </div>
-        </div>
+      {/* ── Panel section ── */}
+      {panelGroups.length > 0 && (
+        <>
+          {/* Approved — ready for panel review */}
+          {panelPendingGroups.length > 0 && (
+            <div className="dashboard-section">
+              <p className="eyebrow">Panel review</p>
+              <h2 className="section-title" style={{ marginTop: 4, fontSize: '1.3rem' }}>
+                Ready to review
+                <span style={{ marginLeft: 10, fontSize: '0.85rem', fontFamily: 'var(--body-font)', fontWeight: 500, color: 'var(--app-hero-subtext)', letterSpacing: 0 }}>
+                  {panelPendingGroups.length} group{panelPendingGroups.length !== 1 ? 's' : ''}
+                </span>
+              </h2>
+              <div className="group-grid">
+                {panelPendingGroups.map((group) => <GroupCard key={group.id} group={group} gradedStudentIds={panelGradedIds} />)}
+              </div>
+            </div>
+          )}
+
+          {panelCompletedGroups.length > 0 && (
+            <div className="dashboard-section">
+              <p className="eyebrow" style={{ color: '#166534' }}>Completed</p>
+              <h2 className="section-title" style={{ marginTop: 4, fontSize: '1.3rem' }}>
+                Panel graded
+                <span style={{ marginLeft: 10, fontSize: '0.85rem', fontFamily: 'var(--body-font)', fontWeight: 500, color: 'var(--app-hero-subtext)', letterSpacing: 0 }}>
+                  {panelCompletedGroups.length} group{panelCompletedGroups.length !== 1 ? 's' : ''}
+                </span>
+              </h2>
+              <div className="group-grid">
+                {panelCompletedGroups.map((group) => <GroupCard key={group.id} group={group} gradedStudentIds={panelGradedIds} />)}
+              </div>
+            </div>
+          )}
+
+          {/* Waiting for guide approval */}
+          {pendingApprovalGroups.length > 0 && (
+            <div className="dashboard-section">
+              <p className="eyebrow" style={{ color: '#92400e' }}>Waiting</p>
+              <h2 className="section-title" style={{ marginTop: 4, fontSize: '1.3rem' }}>
+                Pending guide approval
+                <span style={{ marginLeft: 10, fontSize: '0.85rem', fontFamily: 'var(--body-font)', fontWeight: 500, color: 'var(--app-hero-subtext)', letterSpacing: 0 }}>
+                  {pendingApprovalGroups.length} group{pendingApprovalGroups.length !== 1 ? 's' : ''}
+                </span>
+              </h2>
+              <div className="group-grid">
+                {pendingApprovalGroups.map((group) => (
+                  <div key={group.id} className="group-card" style={{ opacity: 0.6, cursor: 'default' }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                      <span className="group-card-name">{group.name}</span>
+                      <span className="group-badge" style={{ background: '#fef3c7', color: '#92400e', border: '1px solid #fcd34d' }}>Awaiting guide</span>
+                    </div>
+                    {group.project_title && <p className="group-card-title">{group.project_title}</p>}
+                    <div className="group-card-meta"><Users size={13} />{group.students?.length ?? 0} students</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Completed */}
-      {completedGroups.length > 0 && (
+      {panelGroups.length === 0 && !isGuide && (
         <div className="dashboard-section">
-          <p className="eyebrow" style={{ color: '#166534' }}>Completed</p>
-          <h2 className="section-title" style={{ marginTop: 4, fontSize: '1.3rem' }}>
-            Graded
-            <span style={{ marginLeft: 10, fontSize: '0.85rem', fontFamily: 'var(--body-font)', fontWeight: 500, color: 'var(--app-hero-subtext)', letterSpacing: 0 }}>
-              {completedGroups.length} group{completedGroups.length !== 1 ? 's' : ''}
-            </span>
-          </h2>
-          <div className="group-grid">
-            {completedGroups.map((group) => <GroupCard key={group.id} group={group} gradedStudentIds={gradedStudentIds} />)}
-          </div>
+          <p className="section-subtitle">No groups assigned yet.</p>
         </div>
       )}
     </>
