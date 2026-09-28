@@ -30,4 +30,4 @@ jobs:
           npx vercel deploy --prod \
             --token=${{ secrets.VERCEL_TOKEN }} \
             --yes \
-            --project-id=${{ secrets.VERCEL_PROD_PROJECT_ID }}
+            --project=${{ secrets.VERCEL_PROD_PROJECT_ID }}

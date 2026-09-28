@@ -36,5 +36,5 @@ jobs:
             --env NEXT_PUBLIC_SUPABASE_URL="${{ secrets.TEST_SUPABASE_URL }}" \
             --env NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.TEST_SUPABASE_ANON_KEY }}" \
             --env SUPABASE_SERVICE_ROLE_KEY="${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}" \
-            --project-id=${{ secrets.VERCEL_TEST_PROJECT_ID }})
+            --project=${{ secrets.VERCEL_TEST_PROJECT_ID }})
           echo "url=$URL" >> $GITHUB_OUTPUT
