@@ -12,6 +12,7 @@ import {
   FileText,
   Users as UsersIcon,
   Building2,
+  ClipboardList,
   X,
 } from 'lucide-react'
 
@@ -26,10 +27,11 @@ interface NavItem {
 const navItems: NavItem[] = [
   { label: 'Dashboard',   href: '/dashboard',        icon: LayoutDashboard },
   { label: 'Analytics',   href: '/analytics',         icon: BarChart2 },
-  { label: 'Import Data', href: '/admin/import',      icon: Upload,     adminOnly: true },
-  { label: 'Rubrics',     href: '/admin/rubrics',     icon: BookOpen,   adminOnly: true },
-  { label: 'Report',      href: '/admin/report',      icon: FileText,   adminOnly: true },
-  { label: 'Users',       href: '/admin/users',       icon: UsersIcon,  adminOnly: true },
+  { label: 'Import Data',  href: '/admin/import',       icon: Upload,        adminOnly: true },
+  { label: 'Rubrics',      href: '/admin/rubrics',      icon: BookOpen,      adminOnly: true },
+  { label: 'Assignments',  href: '/admin/assignments',  icon: ClipboardList, adminOnly: true },
+  { label: 'Report',       href: '/admin/report',       icon: FileText,      adminOnly: true },
+  { label: 'Users',        href: '/admin/users',        icon: UsersIcon,     adminOnly: true },
   { label: 'All TAGs',    href: '/admin/institution', icon: Building2,  institutionOnly: true },
 ]
 
