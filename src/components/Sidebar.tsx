@@ -105,7 +105,7 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose, adminScope }
                   ? 'All TAGs'
                   : tagLabel
                     ? `${tagLabel} TAG`
-                    : 'Data Science TAG'}
+                    : ''}
               </p>
             </div>
           )}
@@ -146,7 +146,7 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose, adminScope }
                       ? 'All TAGs'
                       : tagLabel
                         ? `${tagLabel} TAG`
-                        : 'Data Science TAG'}
+                        : ''}
                   </p>
                 </div>
               </div>
