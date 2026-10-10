@@ -1,14 +1,20 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { createAdminSupabaseClient } from '@/lib/supabase-admin'
 import { effectiveTagFilter, getAdminScope } from '@/lib/admin-scope'
+import { getActiveTagReview } from '@/lib/review'
 import { redirect } from 'next/navigation'
 import AnalyticsClient from '@/components/analytics/AnalyticsClient'
 import InstitutionAnalyticsClient, { type TagAnalyticsData } from '@/components/analytics/InstitutionAnalyticsClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string>>
+}) {
   const supabase = await createServerSupabaseClient()
+  const params = await searchParams
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
@@ -31,7 +37,6 @@ export default async function AnalyticsPage() {
       const gradedStudentSet = new Set((grades ?? []).map((g: { student_id: string }) => g.student_id))
       const gradingFacultyByTag: Record<string, Set<string>> = {}
 
-      // Build a map: student_id → tag_id via groups
       const studentTagMap = new Map<string, string>()
       for (const group of groups ?? []) {
         if (!group.tag_id) continue
@@ -40,7 +45,6 @@ export default async function AnalyticsPage() {
         }
       }
 
-      // Build grading faculty per TAG: faculty_id → tag_id via profiles
       const facultyTagMap = new Map<string, string>()
       for (const p of profiles ?? []) {
         if (p.tag_id) facultyTagMap.set(p.id, p.tag_id)
@@ -83,33 +87,67 @@ export default async function AnalyticsPage() {
     }
   }
 
+  // ── Review selection ────────────────────────────────────────────────────────
+  const { data: reviewsList } = await supabase.from('reviews').select('id, name, order_index').order('order_index')
+  const activeReview = tagId ? await getActiveTagReview(supabase, tagId) : null
+  const selectedReviewId = params.reviewId || activeReview?.reviewId || (reviewsList ?? [])[0]?.id || null
+
+  // ── Data queries ─────────────────────────────────────────────────────────────
+
   let groupsQuery = supabase.from('groups').select('*').order('name')
   if (tagId) groupsQuery = groupsQuery.eq('tag_id', tagId)
 
-  let criteriaQuery = supabase.from('criteria').select('*, sub_criteria(*)').order('order_index')
-  if (tagId) criteriaQuery = criteriaQuery.eq('tag_id', tagId)
+  // Panel criteria for existing analytics sections
+  let criteriaQuery = supabase
+    .from('criteria')
+    .select('*, sub_criteria(*)')
+    .eq('review_type', 'panel')
+    .order('order_index')
+  if (selectedReviewId) criteriaQuery = criteriaQuery.eq('review_id', selectedReviewId)
+  if (tagId) criteriaQuery = criteriaQuery.or(`tag_id.is.null,tag_id.eq.${tagId}`)
+
+  // Guide criteria for review analytics section
+  let guideCriteriaQuery = supabase
+    .from('criteria')
+    .select('*, sub_criteria(*)')
+    .eq('review_type', 'guide')
+    .order('order_index')
+  if (selectedReviewId) guideCriteriaQuery = guideCriteriaQuery.eq('review_id', selectedReviewId)
+  if (tagId) guideCriteriaQuery = guideCriteriaQuery.or(`tag_id.is.null,tag_id.eq.${tagId}`)
 
   let profilesQuery = supabase.from('profiles').select('*').order('name')
   if (tagId) profilesQuery = profilesQuery.eq('tag_id', tagId)
+
+  // Grades scoped to the selected review
+  let myGradesQuery = supabase.from('grades').select('*').eq('faculty_id', user.id).gt('marks', 0)
+  if (selectedReviewId) myGradesQuery = myGradesQuery.eq('review_id', selectedReviewId)
+
+  let allGradesQuery = supabase.from('grades').select('*').gt('marks', 0).limit(200000)
+  if (selectedReviewId) allGradesQuery = allGradesQuery.eq('review_id', selectedReviewId)
+
+  // Group review statuses for selected review
+  const grsPromise = isAdmin && selectedReviewId
+    ? supabase.from('group_review_status').select('*').eq('review_id', selectedReviewId)
+    : Promise.resolve({ data: [] })
 
   const [
     { data: groups },
     { data: students },
     { data: criteria },
+    { data: guideCriteria },
     { data: myGrades },
     { data: allGrades },
     { data: profiles },
+    { data: groupReviewStatuses },
   ] = await Promise.all([
     groupsQuery,
     supabase.from('students').select('*'),
     criteriaQuery,
-    supabase.from('grades').select('*').eq('faculty_id', user.id).gt('marks', 0),
-    isAdmin
-      ? supabase.from('grades').select('*').gt('marks', 0).limit(200000)
-      : Promise.resolve({ data: [] }),
-    isAdmin
-      ? profilesQuery
-      : Promise.resolve({ data: [] }),
+    isAdmin ? guideCriteriaQuery : Promise.resolve({ data: [] }),
+    myGradesQuery,
+    isAdmin ? allGradesQuery : Promise.resolve({ data: [] }),
+    isAdmin ? profilesQuery : Promise.resolve({ data: [] }),
+    grsPromise,
   ])
 
   return (
@@ -120,9 +158,13 @@ export default async function AnalyticsPage() {
       groups={groups ?? []}
       students={students ?? []}
       criteria={criteria ?? []}
+      guideCriteria={(guideCriteria ?? []) as NonNullable<typeof guideCriteria>}
       myGrades={myGrades ?? []}
       allGrades={(allGrades ?? []) as NonNullable<typeof allGrades>}
       profiles={(profiles ?? []) as NonNullable<typeof profiles>}
+      reviews={reviewsList ?? []}
+      selectedReviewId={selectedReviewId}
+      groupReviewStatuses={(groupReviewStatuses ?? []) as NonNullable<typeof groupReviewStatuses>}
     />
   )
 }

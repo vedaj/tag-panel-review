@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { gradeKey, feedbackKey } from '@/lib/utils'
 import type { Group, Student, Criteria, SubCriteria, Grade, Feedback, GradeMap, FeedbackMap, ProjectType } from '@/types/database'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Save, Users, MessageSquare, CheckCircle2, Loader2, Trash2, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Save, Users, MessageSquare, CheckCircle2, Loader2, Trash2, AlertTriangle, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { ProjectTypeSelector, PROJECT_TYPES } from './ProjectTypeSelector'
 import { GradeTable } from './GradeTable'
@@ -20,9 +20,12 @@ interface Props {
   existingFeedback: Feedback[]
   facultyId: string
   isAdmin: boolean
+  reviewId: string
+  reviewName: string
+  isLocked: boolean
 }
 
-export function GradingSheetClient({ group, criteria, existingGrades, existingFeedback, facultyId, isAdmin }: Props) {
+export function GradingSheetClient({ group, criteria, existingGrades, existingFeedback, facultyId, isAdmin, reviewId, reviewName, isLocked }: Props) {
   const supabase = createClient()
   const router = useRouter()
 
@@ -138,18 +141,18 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
     setSaving(true)
     setError(null)
     try {
-      const upsertRows: { faculty_id: string; student_id: string; criteria_id: string; sub_criteria_id: string | null; marks: number }[] = []
+      const upsertRows: { review_id: string; faculty_id: string; student_id: string; criteria_id: string; sub_criteria_id: string | null; marks: number }[] = []
 
       for (const student of students) {
         for (const crit of visibleCriteria) {
           if (crit.sub_criteria.length > 0) {
             for (const sub of crit.sub_criteria) {
               const marks = getGrade(student.id, crit.id, sub.id)
-              if (marks > 0) upsertRows.push({ faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: sub.id, marks })
+              if (marks > 0) upsertRows.push({ review_id: reviewId, faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: sub.id, marks })
             }
           } else {
             const marks = getGrade(student.id, crit.id, null)
-            if (marks > 0) upsertRows.push({ faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: null, marks })
+            if (marks > 0) upsertRows.push({ review_id: reviewId, faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: null, marks })
           }
         }
       }
@@ -157,7 +160,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
       if (upsertRows.length > 0) {
         const { error: gradesErr } = await supabase
           .from('grades')
-          .upsert(upsertRows, { onConflict: 'faculty_id,student_id,criteria_id,sub_criteria_id' })
+          .upsert(upsertRows, { onConflict: 'review_id,faculty_id,student_id,criteria_id,sub_criteria_id' })
         if (gradesErr) throw gradesErr
       }
 
@@ -170,6 +173,7 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
           .from('grades')
           .select('id, student_id, criteria_id, sub_criteria_id')
           .eq('faculty_id', facultyId)
+          .eq('review_id', reviewId)
           .in('student_id', studentIds)
         const staleIds = (existing ?? [])
           .filter((g) => !upsertedKeys.has(`${g.student_id}:${g.criteria_id}:${g.sub_criteria_id ?? 'null'}`))
@@ -188,13 +192,13 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
 
       const feedbackRows = []
       const groupFb = feedbacks[feedbackKey(group.id, null)]
-      if (groupFb !== undefined) feedbackRows.push({ faculty_id: facultyId, group_id: group.id, student_id: null, content: groupFb })
+      if (groupFb !== undefined) feedbackRows.push({ review_id: reviewId, faculty_id: facultyId, group_id: group.id, student_id: null, content: groupFb })
       for (const student of students) {
         const fb = feedbacks[feedbackKey(group.id, student.id)]
-        if (fb !== undefined) feedbackRows.push({ faculty_id: facultyId, group_id: group.id, student_id: student.id, content: fb })
+        if (fb !== undefined) feedbackRows.push({ review_id: reviewId, faculty_id: facultyId, group_id: group.id, student_id: student.id, content: fb })
       }
       if (feedbackRows.length > 0) {
-        const { error: fbErr } = await supabase.from('feedback').upsert(feedbackRows, { onConflict: 'faculty_id,group_id,student_id' })
+        const { error: fbErr } = await supabase.from('feedback').upsert(feedbackRows, { onConflict: 'review_id,faculty_id,group_id,student_id' })
         if (fbErr) throw fbErr
       }
 
@@ -212,9 +216,9 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
     try {
       const studentIds = students.map((s) => s.id)
       if (studentIds.length > 0) {
-        await supabase.from('grades').delete().eq('faculty_id', facultyId).in('student_id', studentIds)
+        await supabase.from('grades').delete().eq('faculty_id', facultyId).eq('review_id', reviewId).in('student_id', studentIds)
       }
-      await supabase.from('feedback').delete().eq('faculty_id', facultyId).eq('group_id', group.id)
+      await supabase.from('feedback').delete().eq('faculty_id', facultyId).eq('review_id', reviewId).eq('group_id', group.id)
       if (clearType) {
         await supabase.from('groups').update({ project_type: null }).eq('id', group.id)
         setProjectTypeState('')
@@ -280,19 +284,32 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
             )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '4px 9px', borderRadius: '999px',
+              background: isLocked ? 'hsl(var(--muted))' : 'hsl(var(--primary) / 0.08)',
+              color: isLocked ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary))',
+              border: `1px solid ${isLocked ? 'hsl(var(--border))' : 'hsl(var(--primary) / 0.2)'}`,
+              fontSize: '0.72rem', fontWeight: 600, flexShrink: 0,
+            }}>
+              {isLocked && <Lock size={10} />}{reviewName}
+            </span>
             <Button variant="outline" size="sm" onClick={() => setShowFeedback(!showFeedback)} className="gap-1.5 hidden sm:flex">
               <MessageSquare size={14} /> Feedback
             </Button>
-            <Button
-              variant="outline" size="sm"
-              onClick={() => setConfirmReset((v) => !v)}
-              className="gap-1.5 text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
-            >
-              <Trash2 size={14} /> Reset
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={saving || resetting} className="gap-1.5">
+            {!isLocked && (
+              <Button
+                variant="outline" size="sm"
+                onClick={() => setConfirmReset((v) => !v)}
+                className="gap-1.5 text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/10"
+              >
+                <Trash2 size={14} /> Reset
+              </Button>
+            )}
+            <Button size="sm" onClick={handleSave} disabled={saving || resetting || isLocked} className="gap-1.5">
               {saving ? <><Loader2 size={14} className="animate-spin" />Saving…</>
                : saved ? <><CheckCircle2 size={14} />Saved</>
+               : isLocked ? <><Lock size={14} />Locked</>
                : <><Save size={14} />Save</>}
             </Button>
           </div>
@@ -302,8 +319,16 @@ export function GradingSheetClient({ group, criteria, existingGrades, existingFe
       <div className="px-3 md:px-6 py-4 space-y-5">
         <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
           <span className="flex items-center gap-1.5"><Users size={14} />{students.length} student{students.length !== 1 ? 's' : ''}</span>
-          {group.guide1 && <span>Guide: <strong className="text-foreground">{group.guide1}{group.guide2 ? `, ${group.guide2}` : ''}</strong></span>}
         </div>
+
+        {isLocked && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 'calc(var(--radius) * 1.2)', background: 'hsl(var(--muted))', border: '1px solid hsl(var(--border))' }}>
+            <Lock size={14} style={{ color: 'hsl(var(--muted-foreground))', flexShrink: 0 }} />
+            <p style={{ margin: 0, fontSize: '0.85rem', color: 'hsl(var(--muted-foreground))' }}>
+              This review is locked. Scores are read-only.
+            </p>
+          </div>
+        )}
 
         {confirmReset && (
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 16px', borderRadius: 'calc(var(--radius) * 1.4)', background: '#fff5f5', border: '1px solid #fecaca' }}>

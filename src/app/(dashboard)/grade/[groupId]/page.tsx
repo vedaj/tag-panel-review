@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { notFound, redirect } from 'next/navigation'
 import { GradingSheetClient } from '@/components/grading/GradingSheetClient'
+import { getActiveTagReview, isExpired } from '@/lib/review'
 
 interface Props {
   params: Promise<{ groupId: string }>
@@ -49,13 +50,36 @@ export default async function GradePage({ params }: Props) {
     a.roll_number.localeCompare(b.roll_number)
   )
 
-  // Fetch criteria with sub-criteria
+  // Resolve active review for this group's TAG
+  const tagId = group.tag_id ?? profile?.tag_id ?? null
+  const activeReview = tagId ? await getActiveTagReview(supabase, tagId) : null
+  const isLocked = !activeReview || isExpired(activeReview.expiresAt)
+  const reviewId = activeReview?.reviewId ?? null
+
+  // Auto-lock expired review
+  if (activeReview && isExpired(activeReview.expiresAt)) {
+    await supabase
+      .from('tag_reviews')
+      .update({ status: 'locked', locked_at: new Date().toISOString(), locked_by: null })
+      .eq('id', activeReview.tagReviewId)
+  }
+
+  if (!reviewId) {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
+        No active review for this TAG. Ask the admin to activate a review.
+      </div>
+    )
+  }
+
+  // Fetch panel criteria scoped to this review
   const { data: criteria } = await supabase
     .from('criteria')
     .select('*, sub_criteria(id, title, description, max_marks, order_index, allowed_marks), allowed_marks')
+    .eq('review_id', reviewId)
+    .eq('review_type', 'panel')
     .order('order_index')
 
-  // Sort sub_criteria within each criterion
   const sortedCriteria = (criteria ?? []).map((c) => ({
     ...c,
     project_type: c.project_type ?? 'all',
@@ -65,21 +89,23 @@ export default async function GradePage({ params }: Props) {
       .map((s: { allowed_marks?: string | null, [k: string]: unknown }) => ({ ...s, allowed_marks: s.allowed_marks ?? '' })),
   }))
 
-  // Fetch this faculty's existing grades for this group
+  // Fetch this faculty's existing grades for this group + review
   const studentIds = group.students.map((s: { id: string }) => s.id)
   const { data: existingGrades } = studentIds.length > 0
     ? await supabase
         .from('grades')
         .select('*')
         .eq('faculty_id', user.id)
+        .eq('review_id', reviewId)
         .in('student_id', studentIds)
     : { data: [] }
 
-  // Fetch feedback
+  // Fetch feedback scoped to this review
   const { data: existingFeedback } = await supabase
     .from('feedback')
     .select('*')
     .eq('faculty_id', user.id)
+    .eq('review_id', reviewId)
     .eq('group_id', groupId)
 
   return (
@@ -89,7 +115,10 @@ export default async function GradePage({ params }: Props) {
       existingGrades={existingGrades ?? []}
       existingFeedback={existingFeedback ?? []}
       facultyId={user.id}
-      isAdmin={profile?.role === 'admin' || profile?.role === 'institution_admin'}
+      isAdmin={isAdmin}
+      reviewId={reviewId}
+      reviewName={activeReview?.reviewName ?? 'Review'}
+      isLocked={isLocked}
     />
   )
 }

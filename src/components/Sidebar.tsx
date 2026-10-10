@@ -12,6 +12,8 @@ import {
   FileText,
   Users as UsersIcon,
   Building2,
+  ClipboardList,
+  CalendarRange,
   X,
 } from 'lucide-react'
 
@@ -21,16 +23,20 @@ interface NavItem {
   icon: React.ElementType
   adminOnly?: boolean
   institutionOnly?: boolean
+  tagAdminOnly?: boolean
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard',   href: '/dashboard',        icon: LayoutDashboard },
-  { label: 'Analytics',   href: '/analytics',         icon: BarChart2 },
-  { label: 'Import Data', href: '/admin/import',      icon: Upload,     adminOnly: true },
-  { label: 'Rubrics',     href: '/admin/rubrics',     icon: BookOpen,   adminOnly: true },
-  { label: 'Report',      href: '/admin/report',      icon: FileText,   adminOnly: true },
-  { label: 'Users',       href: '/admin/users',       icon: UsersIcon,  adminOnly: true },
-  { label: 'All TAGs',    href: '/admin/institution', icon: Building2,  institutionOnly: true },
+  { label: 'Dashboard',     href: '/dashboard',           icon: LayoutDashboard },
+  { label: 'Analytics',     href: '/analytics',            icon: BarChart2 },
+  { label: 'Import Data',   href: '/admin/import',         icon: Upload,        adminOnly: true },
+  { label: 'Reviews',       href: '/admin/tag-reviews',    icon: CalendarRange, tagAdminOnly: true },
+  { label: 'Rubrics',       href: '/admin/rubrics',        icon: BookOpen,      adminOnly: true },
+  { label: 'Assignments',   href: '/admin/assignments',    icon: ClipboardList, adminOnly: true },
+  { label: 'Report',        href: '/admin/report',         icon: FileText,      adminOnly: true },
+  { label: 'Users',         href: '/admin/users',          icon: UsersIcon,     adminOnly: true },
+  { label: 'All TAGs',      href: '/admin/institution',    icon: Building2,     institutionOnly: true },
+  { label: 'Reviews',       href: '/admin/reviews',        icon: CalendarRange, institutionOnly: true },
 ]
 
 interface SidebarProps {
@@ -49,7 +55,8 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose, adminScope }
 
   const visibleItems = navItems.filter((item) => {
     if (item.institutionOnly) return isInstitutionAdmin
-    if (item.adminOnly) return isTagAdmin
+    if (item.tagAdminOnly) return isTagAdmin
+    if (item.adminOnly) return isTagAdmin || isInstitutionAdmin
     return true
   })
 
@@ -103,7 +110,7 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose, adminScope }
                   ? 'All TAGs'
                   : tagLabel
                     ? `${tagLabel} TAG`
-                    : 'Data Science TAG'}
+                    : ''}
               </p>
             </div>
           )}
@@ -144,7 +151,7 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose, adminScope }
                       ? 'All TAGs'
                       : tagLabel
                         ? `${tagLabel} TAG`
-                        : 'Data Science TAG'}
+                        : ''}
                   </p>
                 </div>
               </div>

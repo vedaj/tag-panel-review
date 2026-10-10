@@ -377,7 +377,7 @@ function buildSheet(data: ReportData, projectType: ProjectType): Record<string, 
   const { groups, students, faculty, criteria, grades, feedback } = data
 
   const typeCriteria = criteria
-    .filter((c) => c.project_type === projectType)
+    .filter((c) => c.project_type === projectType && (c as { review_type?: string }).review_type !== 'guide')
     .sort((a, b) => a.order_index - b.order_index)
 
   const typeGroups = groups
@@ -504,7 +504,7 @@ export function generateAllReport(data: ReportData): Blob {
     if (!projectType) continue
 
     const typeCriteria = criteria
-      .filter((c) => c.project_type === projectType)
+      .filter((c) => c.project_type === projectType && (c as { review_type?: string }).review_type !== 'guide')
       .sort((a, b) => a.order_index - b.order_index)
       .slice(0, NUM_CRITERIA)
 
@@ -613,7 +613,7 @@ export function generateAuditReport(data: ReportData): Blob {
     if (!projectType) continue
 
     const typeCriteria = criteria
-      .filter((c) => c.project_type === projectType)
+      .filter((c) => c.project_type === projectType && (c as { review_type?: string }).review_type !== 'guide')
       .sort((a, b) => a.order_index - b.order_index)
       .slice(0, NUM_CRITERIA)
 
@@ -685,6 +685,132 @@ export function generateAuditReport(data: ReportData): Blob {
 export function generateProjectTypeReport(data: ReportData, projectType: ProjectType): Blob {
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, buildSheet(data, projectType), capitalize(projectType))
+  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
+  return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+}
+
+// ── Guide / Panel review sheets ──────────────────────────────────────────────
+
+function buildReviewSheet(data: ReportData, reviewType: 'guide' | 'panel', sheetTitle: string): Record<string, unknown> {
+  const { groups, students, faculty, criteria, grades, feedback } = data
+  const generatedDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })
+
+  const reviewCriteria = criteria
+    .filter((c) => (c as { review_type?: string }).review_type === reviewType)
+    .sort((a, b) => a.order_index - b.order_index)
+
+  const headers: string[] = [
+    'Group', 'Project Title', 'Project Type', 'Guide 1', 'Guide 2',
+    'Roll Number', 'Student Name',
+    ...reviewCriteria.map((c) => `${c.title}\n(/${c.max_marks})`),
+    'Total', 'Max Marks', '% Score',
+    'Student Comments', 'Group Comments',
+  ]
+
+  const aoa: (string | number | null)[][] = [
+    ['Panel Review - Data Science TAG'],
+    ['Department of Computer Science & Engineering'],
+    ['School of Computing'],
+    ['Amrita Vishwa Vidyapeetham, Coimbatore'],
+    [sheetTitle],
+    [`Generated: ${generatedDate}`],
+    [null],
+    headers,
+  ]
+
+  const allGroups = [...groups].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+  )
+
+  for (const group of allGroups) {
+    // For each criterion, apply only if project_type matches group or is 'all'
+    const groupCriteria = reviewCriteria.filter((c) => {
+      const pt = (c as { project_type?: string }).project_type ?? 'all'
+      return pt === 'all' || pt === group.project_type
+    })
+
+    const maxTotal = groupCriteria.reduce((a, c) => a + c.max_marks, 0)
+    const groupComments = gatherComments(feedback, faculty, group.id, null)
+    const groupStudents = students
+      .filter((s) => s.group_id === group.id)
+      .sort((a, b) => a.roll_number.localeCompare(b.roll_number))
+
+    for (const student of groupStudents) {
+      const scores = reviewCriteria.map((c) => {
+        const pt = (c as { project_type?: string }).project_type ?? 'all'
+        if (pt !== 'all' && pt !== group.project_type) return 0
+        return critMean(student.id, c, grades)
+      })
+      const total = parseFloat(scores.reduce((a, b) => a + b, 0).toFixed(2))
+      const pct = maxTotal > 0 ? parseFloat(((total / maxTotal) * 100).toFixed(1)) : 0
+      const studentComments = gatherComments(feedback, faculty, group.id, student.id)
+      aoa.push([
+        group.name, group.project_title, group.project_type ? capitalize(group.project_type) : '',
+        group.guide1 ?? '', group.guide2 ?? '',
+        student.roll_number, student.name,
+        ...scores, total, maxTotal, pct,
+        studentComments, groupComments,
+      ])
+    }
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa) as Record<string, unknown>
+
+  const firstScore = 7
+  const numCritCols = reviewCriteria.length
+  const totalCol = firstScore + numCritCols
+  const maxCol = totalCol + 1
+  const pctCol = maxCol + 1
+  const commentStart = pctCol + 1
+  const totalMax = reviewCriteria.reduce((a, c) => a + c.max_marks, 0)
+
+  const scoreColMaxes = new Map<number, number>()
+  reviewCriteria.forEach((c, i) => scoreColMaxes.set(firstScore + i, c.max_marks))
+
+  applyStyles(ws, {
+    numCols: headers.length,
+    leftTextCols: new Set([0, 1, 3, 4, 6]),
+    centerTextCols: new Set([2, 5]),
+    scoreColMaxes,
+    totalCol,
+    totalMax,
+    maxMarksCol: maxCol,
+    pctCol,
+    commentCols: new Set([commentStart, commentStart + 1]),
+    typeCol: 2,
+    numDataRows: aoa.length - 8,
+  })
+
+  ws['!freeze'] = { xSplit: 0, ySplit: 8, topLeftCell: 'A9', activePane: 'bottomLeft', state: 'frozen' }
+  ws['!cols'] = [
+    { wch: 14 }, { wch: 30 }, { wch: 14 }, { wch: 22 }, { wch: 18 },
+    { wch: 14 }, { wch: 22 },
+    ...reviewCriteria.map(() => ({ wch: 18 })),
+    { wch: 10 }, { wch: 10 }, { wch: 10 },
+    { wch: 44 }, { wch: 44 },
+  ]
+
+  return ws
+}
+
+export function generateGuideReport(data: ReportData): Blob {
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, buildReviewSheet(data, 'guide', 'Guide Review — Marks Report'), 'Guide Marks')
+  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
+  return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+}
+
+export function generatePanelReport(data: ReportData): Blob {
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, buildReviewSheet(data, 'panel', 'Panel Review — Combined Marks Report'), 'Panel Marks')
+  const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
+  return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+}
+
+export function generateCombinedGuidePanel(data: ReportData): Blob {
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, buildReviewSheet(data, 'guide', 'Guide Review — Marks Report'), 'Guide Marks')
+  XLSX.utils.book_append_sheet(wb, buildReviewSheet(data, 'panel', 'Panel Review — Combined Marks Report'), 'Panel Marks')
   const buf = XLSX.write(wb, { type: 'array', bookType: 'xlsx' })
   return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
 }
