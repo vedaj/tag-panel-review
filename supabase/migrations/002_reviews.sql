@@ -184,11 +184,13 @@ CREATE POLICY "grs_write" ON group_review_status FOR ALL
 -- ────────────────────────────────────────────────────────────
 ALTER TABLE grades
   DROP CONSTRAINT IF EXISTS grades_faculty_id_student_id_criteria_id_sub_criteria_id_key,
+  DROP CONSTRAINT IF EXISTS grades_review_faculty_student_criteria_sub_key,
   ADD CONSTRAINT grades_review_faculty_student_criteria_sub_key
     UNIQUE (review_id, faculty_id, student_id, criteria_id, sub_criteria_id);
 
 ALTER TABLE feedback
   DROP CONSTRAINT IF EXISTS feedback_faculty_id_group_id_student_id_key,
+  DROP CONSTRAINT IF EXISTS feedback_review_faculty_group_student_key,
   ADD CONSTRAINT feedback_review_faculty_group_student_key
     UNIQUE (review_id, faculty_id, group_id, student_id);
 
