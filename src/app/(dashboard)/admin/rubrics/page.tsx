@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase'
-import type { Criteria, SubCriteria } from '@/types/database'
+import type { Criteria, SubCriteria, Review } from '@/types/database'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -23,35 +23,46 @@ const PROJECT_TYPE_OPTIONS = [
 export default function RubricsPage() {
   const supabase = createClient()
   const [activeTab, setActiveTab] = useState<Tab>('panel')
+  const [reviews, setReviews] = useState<Review[]>([])
+  const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null)
   const [criteria, setCriteria] = useState<CriteriaWithSub[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedMsg, setSavedMsg] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [callerTagId, setCallerTagId] = useState<string | null>(null)
+  const [callerRole, setCallerRole] = useState<string | null>(null)
 
   useEffect(() => {
     async function init() {
       const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        const { data: profile } = await supabase.from('profiles').select('tag_id').eq('id', user.id).single()
-        setCallerTagId(profile?.tag_id ?? null)
-        await loadCriteria(profile?.tag_id ?? null)
+      if (!user) return
+      const { data: profile } = await supabase.from('profiles').select('tag_id, role').eq('id', user.id).single()
+      setCallerTagId(profile?.tag_id ?? null)
+      setCallerRole(profile?.role ?? null)
+
+      const { data: rv } = await supabase.from('reviews').select('*').order('order_index')
+      const reviewList = rv ?? []
+      setReviews(reviewList)
+      if (reviewList.length > 0) {
+        setSelectedReviewId(reviewList[0].id)
+        await loadCriteria(reviewList[0].id, profile?.tag_id ?? null)
       } else {
-        await loadCriteria(null)
+        setLoading(false)
       }
     }
     init()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  async function loadCriteria(tagId?: string | null) {
+  async function loadCriteria(reviewId: string, tagId?: string | null) {
     setLoading(true)
     let q = supabase
       .from('criteria')
       .select('*, sub_criteria(id, title, description, max_marks, order_index, criteria_id, allowed_marks)')
+      .eq('review_id', reviewId)
       .order('order_index')
-    if (tagId) q = q.eq('tag_id', tagId)
+    if (tagId) q = q.or(`tag_id.is.null,tag_id.eq.${tagId}`)
     const { data } = await q
 
     if (data) {
@@ -70,6 +81,11 @@ export default function RubricsPage() {
     setLoading(false)
   }
 
+  async function handleSelectReview(reviewId: string) {
+    setSelectedReviewId(reviewId)
+    await loadCriteria(reviewId, callerTagId)
+  }
+
   function updateCriteria(id: string, field: string, value: string | number) {
     setCriteria((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)))
   }
@@ -85,10 +101,11 @@ export default function RubricsPage() {
   }
 
   function addCriteria() {
+    if (!selectedReviewId) return
     const id = crypto.randomUUID()
     setCriteria((prev) => [
       ...prev,
-      { id, title: '', description: '', max_marks: 10, order_index: prev.length, project_type: 'all', allowed_marks: '', review_type: activeTab as ReviewType, created_at: '', sub_criteria: [] },
+      { id, review_id: selectedReviewId, title: '', description: '', max_marks: 10, order_index: prev.length, project_type: 'all', allowed_marks: '', review_type: activeTab as ReviewType, created_at: '', sub_criteria: [] },
     ])
     setExpanded((prev) => new Set([...prev, id]))
   }
@@ -105,13 +122,17 @@ export default function RubricsPage() {
   }
 
   async function handleSave() {
+    if (!selectedReviewId) return
     setSaving(true)
     setSavedMsg('')
     try {
-      const [{ data: dbCriteria }, { data: dbSubs }] = await Promise.all([
-        supabase.from('criteria').select('id'),
-        supabase.from('sub_criteria').select('id'),
-      ])
+      const { data: dbCriteriaRaw } = await supabase.from('criteria').select('id').eq('review_id', selectedReviewId)
+      const dbCriteria = dbCriteriaRaw ?? []
+      const criteriaIds = dbCriteria.map((c: { id: string }) => c.id)
+      const { data: dbSubsRaw } = criteriaIds.length > 0
+        ? await supabase.from('sub_criteria').select('id').in('criteria_id', criteriaIds)
+        : { data: [] }
+      const dbSubs = dbSubsRaw ?? []
       const dbCriteriaIds = new Set((dbCriteria ?? []).map((c: { id: string }) => c.id))
       const dbSubIds = new Set((dbSubs ?? []).map((s: { id: string }) => s.id))
 
@@ -136,6 +157,7 @@ export default function RubricsPage() {
 
       const criteriaRows = orderedCriteria.map((c) => ({
         id: c.id,
+        review_id: selectedReviewId,
         title: c.title,
         description: c.description,
         max_marks: c.max_marks,
@@ -166,7 +188,7 @@ export default function RubricsPage() {
         if (error) throw error
       }
 
-      await loadCriteria(callerTagId)
+      if (selectedReviewId) await loadCriteria(selectedReviewId, callerTagId)
       setSavedMsg('Saved!')
       setTimeout(() => setSavedMsg(''), 3000)
     } finally {
@@ -201,6 +223,36 @@ export default function RubricsPage() {
           </Button>
         </div>
       </div>
+
+      {/* Review selector */}
+      {reviews.length > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'hsl(var(--muted-foreground))', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Review</span>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {reviews.map((r) => (
+              <button
+                key={r.id}
+                onClick={() => handleSelectReview(r.id)}
+                style={{
+                  padding: '5px 14px', borderRadius: 8, border: '1px solid',
+                  cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, transition: 'all 0.12s',
+                  borderColor: selectedReviewId === r.id ? 'hsl(var(--primary))' : 'hsl(var(--border))',
+                  background: selectedReviewId === r.id ? 'hsl(var(--primary) / 0.08)' : 'transparent',
+                  color: selectedReviewId === r.id ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
+                }}
+              >
+                {r.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {reviews.length === 0 && !loading && (
+        <div style={{ padding: '12px 16px', borderRadius: 8, background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))', fontSize: '0.875rem', marginBottom: 20 }}>
+          No reviews created yet.{callerRole === 'institution_admin' ? ' Create a review first from the Reviews page.' : ' Ask the institution admin to create a review.'}
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 24, background: 'hsl(var(--muted))', borderRadius: 10, padding: 4, width: 'fit-content' }}>

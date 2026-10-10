@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { notFound, redirect } from 'next/navigation'
 import { GuideSheetClient } from '@/components/grading/GuideSheetClient'
+import { getActiveTagReview, isExpired } from '@/lib/review'
 
 interface Props {
   params: Promise<{ groupId: string }>
@@ -15,7 +16,6 @@ export default async function GuidePage({ params }: Props) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Must be guide1 or guide2 on this group
   const { data: group } = await supabase
     .from('groups')
     .select('*, students(id, name, roll_number), guide1_profile:guide1_id(id, name, email), guide2_profile:guide2_id(id, name, email)')
@@ -25,8 +25,8 @@ export default async function GuidePage({ params }: Props) {
   if (!group) notFound()
 
   const isGuide = group.guide1_id === user.id || group.guide2_id === user.id
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  const isAdmin = profile?.role === 'admin'
+  const { data: profile } = await supabase.from('profiles').select('role, tag_id').eq('id', user.id).single()
+  const isAdmin = profile?.role === 'admin' || profile?.role === 'institution_admin'
 
   if (!isGuide && !isAdmin) notFound()
 
@@ -34,10 +34,32 @@ export default async function GuidePage({ params }: Props) {
     (a: { roll_number: string }, b: { roll_number: string }) => a.roll_number.localeCompare(b.roll_number)
   )
 
-  // Only guide-type criteria
+  // Resolve active review
+  const tagId = group.tag_id ?? profile?.tag_id ?? null
+  const activeReview = tagId ? await getActiveTagReview(supabase, tagId) : null
+  const isLocked = !activeReview || isExpired(activeReview.expiresAt)
+  const reviewId = activeReview?.reviewId ?? null
+
+  if (activeReview && isExpired(activeReview.expiresAt)) {
+    await supabase
+      .from('tag_reviews')
+      .update({ status: 'locked', locked_at: new Date().toISOString(), locked_by: null })
+      .eq('id', activeReview.tagReviewId)
+  }
+
+  if (!reviewId) {
+    return (
+      <div className="flex items-center justify-center h-64 text-muted-foreground text-sm">
+        No active review for this TAG. Ask the admin to activate a review.
+      </div>
+    )
+  }
+
+  // Guide criteria for this review
   const { data: criteria } = await supabase
     .from('criteria')
     .select('*, sub_criteria(id, title, description, max_marks, order_index, allowed_marks)')
+    .eq('review_id', reviewId)
     .eq('review_type', 'guide')
     .order('order_index')
 
@@ -52,11 +74,21 @@ export default async function GuidePage({ params }: Props) {
 
   const studentIds = group.students.map((s: { id: string }) => s.id)
   const { data: existingGrades } = studentIds.length > 0
-    ? await supabase.from('grades').select('*').eq('faculty_id', user.id).in('student_id', studentIds)
+    ? await supabase.from('grades').select('*').eq('faculty_id', user.id).eq('review_id', reviewId).in('student_id', studentIds)
     : { data: [] }
 
   const { data: existingFeedback } = await supabase
-    .from('feedback').select('*').eq('faculty_id', user.id).eq('group_id', groupId)
+    .from('feedback').select('*').eq('faculty_id', user.id).eq('review_id', reviewId).eq('group_id', groupId)
+
+  // Guide approval status for this review
+  const { data: grs } = await supabase
+    .from('group_review_status')
+    .select('guide_approval_status')
+    .eq('group_id', groupId)
+    .eq('review_id', reviewId)
+    .maybeSingle()
+
+  const guideApprovalStatus = grs?.guide_approval_status ?? 'pending'
 
   return (
     <GuideSheetClient
@@ -65,6 +97,10 @@ export default async function GuidePage({ params }: Props) {
       existingGrades={existingGrades ?? []}
       existingFeedback={existingFeedback ?? []}
       facultyId={user.id}
+      reviewId={reviewId}
+      reviewName={activeReview?.reviewName ?? 'Review'}
+      isLocked={isLocked}
+      guideApprovalStatus={guideApprovalStatus}
     />
   )
 }

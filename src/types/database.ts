@@ -1,4 +1,6 @@
 export type Role = 'admin' | 'faculty' | 'institution_admin'
+export type ReviewStatus = 'upcoming' | 'active' | 'locked'
+export type UnlockRequestStatus = 'pending' | 'approved' | 'rejected'
 
 export interface Tag {
   id: string
@@ -19,6 +21,53 @@ export interface Profile {
 
 export type ProjectType = 'research' | 'application' | 'software' | ''
 export type GuideApprovalStatus = 'pending' | 'approved'
+
+export interface Review {
+  id: string
+  name: string
+  order_index: number
+  created_by: string | null
+  created_at: string
+}
+
+export interface TagReview {
+  id: string
+  tag_id: string
+  review_id: string
+  status: ReviewStatus
+  expires_at: string | null
+  activated_by: string | null
+  activated_at: string | null
+  locked_by: string | null
+  locked_at: string | null
+  created_at: string
+  review?: Review
+  tag?: Tag
+}
+
+export interface ReviewUnlockRequest {
+  id: string
+  tag_id: string
+  review_id: string
+  requested_by: string
+  reason: string | null
+  status: UnlockRequestStatus
+  reviewed_by: string | null
+  reviewed_at: string | null
+  created_at: string
+  review?: Review
+  tag?: Tag
+  requester?: Profile
+}
+
+export interface GroupReviewStatus {
+  id: string
+  group_id: string
+  review_id: string
+  guide_approval_status: GuideApprovalStatus
+  guide_approved_at: string | null
+  guide_approved_by: string | null
+}
 
 export interface Group {
   id: string
@@ -53,6 +102,7 @@ export type ReviewType = 'panel' | 'guide'
 
 export interface Criteria {
   id: string
+  review_id: string
   title: string
   description: string
   max_marks: number
@@ -87,6 +137,7 @@ export interface PanelAssignment {
 
 export interface Grade {
   id: string
+  review_id: string
   faculty_id: string
   student_id: string
   criteria_id: string
@@ -98,6 +149,7 @@ export interface Grade {
 
 export interface Feedback {
   id: string
+  review_id: string
   faculty_id: string
   group_id: string
   student_id: string | null

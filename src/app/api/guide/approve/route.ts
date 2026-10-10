@@ -6,13 +6,13 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { groupId } = await req.json()
-  if (!groupId) return NextResponse.json({ error: 'Missing groupId' }, { status: 400 })
+  const { groupId, reviewId } = await req.json()
+  if (!groupId || !reviewId) return NextResponse.json({ error: 'Missing groupId or reviewId' }, { status: 400 })
 
   // Verify caller is guide1 or guide2 on this group
   const { data: group } = await supabase
     .from('groups')
-    .select('guide1_id, guide2_id, guide_approval_status')
+    .select('guide1_id, guide2_id')
     .eq('id', groupId)
     .single()
 
@@ -22,13 +22,14 @@ export async function POST(req: Request) {
   if (!isGuide) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { error } = await supabase
-    .from('groups')
-    .update({
+    .from('group_review_status')
+    .upsert({
+      group_id: groupId,
+      review_id: reviewId,
       guide_approval_status: 'approved',
       guide_approved_at: new Date().toISOString(),
       guide_approved_by: user.id,
-    })
-    .eq('id', groupId)
+    }, { onConflict: 'group_id,review_id' })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })

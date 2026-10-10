@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase'
 import { gradeKey, feedbackKey } from '@/lib/utils'
 import type { Group, Student, Criteria, SubCriteria, Grade, Feedback, GradeMap, FeedbackMap } from '@/types/database'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, Save, Users, MessageSquare, CheckCircle2, Loader2, ThumbsUp, AlertTriangle } from 'lucide-react'
+import { ArrowLeft, Save, Users, MessageSquare, CheckCircle2, Loader2, ThumbsUp, AlertTriangle, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { GradeTable } from './GradeTable'
 import type { GradeCol, CritGroup } from './GradeTable'
@@ -18,9 +18,13 @@ interface Props {
   existingGrades: Grade[]
   existingFeedback: Feedback[]
   facultyId: string
+  reviewId: string
+  reviewName: string
+  isLocked: boolean
+  guideApprovalStatus: 'pending' | 'approved'
 }
 
-export function GuideSheetClient({ group, criteria, existingGrades, existingFeedback, facultyId }: Props) {
+export function GuideSheetClient({ group, criteria, existingGrades, existingFeedback, facultyId, reviewId, reviewName, isLocked, guideApprovalStatus }: Props) {
   const supabase = createClient()
   const router = useRouter()
 
@@ -40,7 +44,7 @@ export function GuideSheetClient({ group, criteria, existingGrades, existingFeed
   const [error, setError] = useState<string | null>(null)
   const [rubricPopup, setRubricPopup] = useState<{ title: string; text: string } | null>(null)
   const [approving, setApproving] = useState(false)
-  const [approved, setApproved] = useState(group.guide_approval_status === 'approved')
+  const [approved, setApproved] = useState(guideApprovalStatus === 'approved')
   const [confirmApprove, setConfirmApprove] = useState(false)
 
   const students = group.students
@@ -123,18 +127,18 @@ export function GuideSheetClient({ group, criteria, existingGrades, existingFeed
     setSaving(true)
     setError(null)
     try {
-      const upsertRows: { faculty_id: string; student_id: string; criteria_id: string; sub_criteria_id: string | null; marks: number }[] = []
+      const upsertRows: { review_id: string; faculty_id: string; student_id: string; criteria_id: string; sub_criteria_id: string | null; marks: number }[] = []
 
       for (const student of students) {
         for (const crit of criteria) {
           if (crit.sub_criteria.length > 0) {
             for (const sub of crit.sub_criteria) {
               const marks = getGrade(student.id, crit.id, sub.id)
-              if (marks > 0) upsertRows.push({ faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: sub.id, marks })
+              if (marks > 0) upsertRows.push({ review_id: reviewId, faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: sub.id, marks })
             }
           } else {
             const marks = getGrade(student.id, crit.id, null)
-            if (marks > 0) upsertRows.push({ faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: null, marks })
+            if (marks > 0) upsertRows.push({ review_id: reviewId, faculty_id: facultyId, student_id: student.id, criteria_id: crit.id, sub_criteria_id: null, marks })
           }
         }
       }
@@ -142,7 +146,7 @@ export function GuideSheetClient({ group, criteria, existingGrades, existingFeed
       if (upsertRows.length > 0) {
         const { error: gradesErr } = await supabase
           .from('grades')
-          .upsert(upsertRows, { onConflict: 'faculty_id,student_id,criteria_id,sub_criteria_id' })
+          .upsert(upsertRows, { onConflict: 'review_id,faculty_id,student_id,criteria_id,sub_criteria_id' })
         if (gradesErr) throw gradesErr
       }
 
@@ -153,7 +157,7 @@ export function GuideSheetClient({ group, criteria, existingGrades, existingFeed
         )
         const { data: existing } = await supabase
           .from('grades').select('id, student_id, criteria_id, sub_criteria_id')
-          .eq('faculty_id', facultyId).in('student_id', studentIds)
+          .eq('faculty_id', facultyId).eq('review_id', reviewId).in('student_id', studentIds)
         const staleIds = (existing ?? [])
           .filter((g) => !upsertedKeys.has(`${g.student_id}:${g.criteria_id}:${g.sub_criteria_id ?? 'null'}`))
           .map((g) => g.id)
@@ -162,13 +166,13 @@ export function GuideSheetClient({ group, criteria, existingGrades, existingFeed
 
       const feedbackRows = []
       const groupFb = feedbacks[feedbackKey(group.id, null)]
-      if (groupFb !== undefined) feedbackRows.push({ faculty_id: facultyId, group_id: group.id, student_id: null, content: groupFb })
+      if (groupFb !== undefined) feedbackRows.push({ review_id: reviewId, faculty_id: facultyId, group_id: group.id, student_id: null, content: groupFb })
       for (const student of students) {
         const fb = feedbacks[feedbackKey(group.id, student.id)]
-        if (fb !== undefined) feedbackRows.push({ faculty_id: facultyId, group_id: group.id, student_id: student.id, content: fb })
+        if (fb !== undefined) feedbackRows.push({ review_id: reviewId, faculty_id: facultyId, group_id: group.id, student_id: student.id, content: fb })
       }
       if (feedbackRows.length > 0) {
-        const { error: fbErr } = await supabase.from('feedback').upsert(feedbackRows, { onConflict: 'faculty_id,group_id,student_id' })
+        const { error: fbErr } = await supabase.from('feedback').upsert(feedbackRows, { onConflict: 'review_id,faculty_id,group_id,student_id' })
         if (fbErr) throw fbErr
       }
 
@@ -188,7 +192,7 @@ export function GuideSheetClient({ group, criteria, existingGrades, existingFeed
       const res = await fetch('/api/guide/approve', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ groupId: group.id }),
+        body: JSON.stringify({ groupId: group.id, reviewId }),
       })
       if (!res.ok) throw new Error((await res.json()).error ?? 'Failed to approve')
       setApproved(true)
@@ -223,8 +227,19 @@ export function GuideSheetClient({ group, criteria, existingGrades, existingFeed
               border: '1px solid hsl(var(--primary) / 0.2)',
               fontSize: '0.72rem', fontWeight: 600, flexShrink: 0,
             }}>
-              Guide Review
+              Guide · {reviewName}
             </span>
+            {isLocked && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                padding: '4px 9px', borderRadius: '999px',
+                background: 'hsl(var(--muted))', color: 'hsl(var(--muted-foreground))',
+                border: '1px solid hsl(var(--border))',
+                fontSize: '0.72rem', fontWeight: 600, flexShrink: 0,
+              }}>
+                <Lock size={10} /> Locked
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <Button variant="outline" size="sm" onClick={() => setShowFeedback(!showFeedback)} className="gap-1.5 hidden sm:flex">
@@ -249,9 +264,10 @@ export function GuideSheetClient({ group, criteria, existingGrades, existingFeed
                 <ThumbsUp size={14} /> Approve for Panel
               </Button>
             )}
-            <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1.5">
+            <Button size="sm" onClick={handleSave} disabled={saving || isLocked} className="gap-1.5">
               {saving ? <><Loader2 size={14} className="animate-spin" />Saving…</>
                : saved ? <><CheckCircle2 size={14} />Saved</>
+               : isLocked ? <><Lock size={14} />Locked</>
                : <><Save size={14} />Save</>}
             </Button>
           </div>
