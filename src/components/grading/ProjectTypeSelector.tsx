@@ -2,6 +2,7 @@ import { ArrowLeft, Lock } from "lucide-react";
 import { FlaskConical, Smartphone, Code2 } from "lucide-react";
 import Link from "next/link";
 import type { Group, ProjectType } from "@/types/database";
+import { groupDisplayName, programTerms } from "@/lib/programs";
 
 export const PROJECT_TYPES: {
 	value: ProjectType;
@@ -69,7 +70,7 @@ export function ProjectTypeSelector({
 				)}
 
 				<div className="mb-6">
-					<h1 className="text-2xl font-bold">{group.name}</h1>
+					<h1 className="text-2xl font-bold">{groupDisplayName(group)}</h1>
 					<input
 						type="text"
 						value={projectTitle}
@@ -119,7 +120,7 @@ export function ProjectTypeSelector({
 						>
 							{isChangingType
 								? "Change the type — your existing marks won't be lost."
-								: "Pick the type that fits this group's work. It decides which rubric you'll see."}
+								: `Pick the type that fits this ${programTerms(group.program ?? "btech").unitLower}'s work. It decides which rubric you'll see.`}
 						</p>
 						<div style={{ display: "grid", gap: "12px" }}>
 							{PROJECT_TYPES.map(({ value, label, description, Icon }) => (
@@ -231,8 +232,8 @@ export function ProjectTypeSelector({
 								margin: "0 auto",
 							}}
 						>
-							No project type has been set for <strong>{group.name}</strong> yet. Ask your admin to
-							assign one before you start grading.
+							No project type has been set for <strong>{groupDisplayName(group)}</strong> yet. Ask
+							your admin to assign one before you start grading.
 						</p>
 					</div>
 				)}

@@ -47,9 +47,15 @@ export function FeedbackPanel({
 			{show && (
 				<CardContent className="space-y-6">
 					<div>
-						<label className="text-sm font-medium mb-2 block">Group Feedback</label>
+						<label className="text-sm font-medium mb-2 block">
+							{group.program === "mtech" ? "Project Feedback" : "Group Feedback"}
+						</label>
 						<Textarea
-							placeholder="Any notes on the project or the group overall…"
+							placeholder={
+								group.program === "mtech"
+									? "Any notes on the project overall…"
+									: "Any notes on the project or the group overall…"
+							}
 							value={feedbacks[feedbackKey(group.id, null)] ?? ""}
 							onChange={(e) => onChange(feedbackKey(group.id, null), e.target.value)}
 							rows={3}

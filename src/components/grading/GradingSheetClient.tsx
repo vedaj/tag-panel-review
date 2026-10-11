@@ -27,6 +27,7 @@ import {
 	Lock,
 } from "lucide-react";
 import Link from "next/link";
+import { groupDisplayName } from "@/lib/programs";
 import { ProjectTypeSelector, PROJECT_TYPES } from "./ProjectTypeSelector";
 import { GradeTable } from "./GradeTable";
 import type { GradeCol, CritGroup } from "./GradeTable";
@@ -366,7 +367,7 @@ export function GradingSheetClient({
 						</Link>
 						<div className="min-w-0">
 							<h1 className="font-bold text-sm md:text-base truncate leading-tight">
-								{group.name}
+								{groupDisplayName(group)}
 							</h1>
 							{projectTitle && (
 								<p className="text-xs text-muted-foreground truncate">{projectTitle}</p>

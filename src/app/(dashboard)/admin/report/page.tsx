@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { useProgram } from "@/components/ProgramContext";
+import { programLabel, programTerms } from "@/lib/programs";
 import {
 	generateAllReport,
 	generateProjectTypeReport,
@@ -104,7 +105,10 @@ export default function ReportPage() {
 		const [{ data: groups }, { data: students }, { data: faculty }, { data: grades }] =
 			await Promise.all([
 				groupsQ,
-				supabase.from("students").select("*"),
+				supabase
+					.from("students")
+					.select("*, group:groups!inner(program)")
+					.eq("group.program", program),
 				facultyQ,
 				supabase.from("grades").select("student_id").limit(50000),
 			]);
@@ -180,6 +184,7 @@ export default function ReportPage() {
 			criteria: sortedCriteria,
 			grades: grades ?? [],
 			feedback: feedback ?? [],
+			program,
 		};
 	}
 
@@ -187,19 +192,26 @@ export default function ReportPage() {
 		setDownloading(key);
 		try {
 			const data = await fetchAll();
+			const filePrefix = `TAG_${programLabel(program).replace(".", "")}`;
 			const date = new Date().toISOString().slice(0, 10);
 			if (key === "all") {
-				downloadBlob(generateAllReport(data), `TAG_All_Projects_${date}.xlsx`);
+				downloadBlob(generateAllReport(data), `${filePrefix}_All_Projects_${date}.xlsx`);
 			} else if (key === "audit") {
-				downloadBlob(generateAuditReport(data), `TAG_Audit_${date}.xlsx`);
+				downloadBlob(generateAuditReport(data), `${filePrefix}_Audit_${date}.xlsx`);
 			} else if (key === "guide") {
-				downloadBlob(generateGuideReport(data), `TAG_Guide_Marks_${date}.xlsx`);
+				downloadBlob(generateGuideReport(data), `${filePrefix}_Guide_Marks_${date}.xlsx`);
 			} else if (key === "panel") {
-				downloadBlob(generatePanelReport(data), `TAG_Panel_Marks_${date}.xlsx`);
+				downloadBlob(generatePanelReport(data), `${filePrefix}_Panel_Marks_${date}.xlsx`);
 			} else if (key === "combined") {
-				downloadBlob(generateCombinedGuidePanel(data), `TAG_Combined_Report_${date}.xlsx`);
+				downloadBlob(
+					generateCombinedGuidePanel(data),
+					`${filePrefix}_Combined_Report_${date}.xlsx`,
+				);
 			} else {
-				downloadBlob(generateProjectTypeReport(data, key), `TAG_${key}_report_${date}.xlsx`);
+				downloadBlob(
+					generateProjectTypeReport(data, key),
+					`${filePrefix}_${key}_report_${date}.xlsx`,
+				);
 			}
 		} finally {
 			setDownloading(null);
@@ -317,7 +329,7 @@ export default function ReportPage() {
 							<thead>
 								<tr>
 									<th>Project Type</th>
-									<th>Groups</th>
+									<th>{programTerms(program).units}</th>
 									<th>Students</th>
 									<th>Graded</th>
 									<th>Progress</th>
@@ -428,8 +440,9 @@ export default function ReportPage() {
 						}}
 					>
 						<p style={{ margin: 0, fontSize: "0.84rem", color: "hsl(var(--muted-foreground))" }}>
-							Three sheets in one file — Research, Application, and Software — each with all group
-							scores, student comments, and group notes.
+							Three sheets in one file — Research, Application, and Software — each with all{" "}
+							{programTerms(program).unitLower} scores, student comments, and{" "}
+							{programTerms(program).unitLower} notes.
 						</p>
 						<button
 							onClick={() => handleDownload("all")}
@@ -514,7 +527,7 @@ export default function ReportPage() {
 									{
 										key: "panel",
 										label: "Panel Marks",
-										sub: "Panel rubrics, all groups",
+										sub: `Panel rubrics, all ${programTerms(program).unitsLower}`,
 										icon: <ClipboardList size={13} />,
 										color: "#0369a1",
 									},
@@ -578,8 +591,8 @@ export default function ReportPage() {
 								color: "hsl(var(--muted-foreground))",
 							}}
 						>
-							Includes group, title, guides, roll numbers, criteria averages, total, percentage, and
-							all comments.
+							Includes {programTerms(program).unitLower}, title, guides, roll numbers, criteria
+							averages, total, percentage, and all comments.
 						</p>
 						<div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
 							{PROJECT_TYPES.map(({ key, label, icon, color }) => (

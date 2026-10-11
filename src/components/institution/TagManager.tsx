@@ -17,6 +17,8 @@ import {
 	ChevronDown,
 } from "lucide-react";
 import type { Tag, Profile } from "@/types/database";
+import { useProgram } from "@/components/ProgramContext";
+import { programTerms } from "@/lib/programs";
 import {
 	createTagAction,
 	updateTagAction,
@@ -479,6 +481,7 @@ function TagCard({
 	pending: boolean;
 	run: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
+	const terms = programTerms(useProgram());
 	const [editing, setEditing] = useState(false);
 	const [editName, setEditName] = useState(tag.name);
 	const [editShort, setEditShort] = useState(tag.short_name);
@@ -627,7 +630,7 @@ function TagCard({
 								}}
 							>
 								{tag.members.length} member{tag.members.length !== 1 ? "s" : ""} · {tag.groupCount}{" "}
-								group{tag.groupCount !== 1 ? "s" : ""}
+								{tag.groupCount !== 1 ? terms.unitsLower : terms.unitLower}
 							</p>
 						</div>
 						<div style={{ display: "flex", gap: 2 }}>
@@ -737,6 +740,7 @@ function TagCard({
 
 export default function TagManager({ tags: initialTags, allProfiles: initialProfiles }: Props) {
 	const router = useRouter();
+	const terms = programTerms(useProgram());
 	const [isPending, startTransition] = useTransition();
 	const [acting, setActing] = useState(false);
 
@@ -905,7 +909,7 @@ export default function TagManager({ tags: initialTags, allProfiles: initialProf
 					{[
 						{ icon: <Building2 size={18} />, value: totals.tags, label: "TAGs" },
 						{ icon: <Users size={18} />, value: totals.members, label: "Assigned members" },
-						{ icon: <ClipboardList size={18} />, value: totals.groups, label: "Groups" },
+						{ icon: <ClipboardList size={18} />, value: totals.groups, label: terms.units },
 						{ icon: <Users size={18} />, value: totals.unassigned, label: "Unassigned" },
 					].map(({ icon, value, label }) => (
 						<div key={label} className="stat-card">

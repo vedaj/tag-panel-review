@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useProgram } from "@/components/ProgramContext";
+import { programTerms } from "@/lib/programs";
 import type {
 	Group,
 	Student,
@@ -451,6 +453,7 @@ function ReviewAnalyticsSection({
 	students,
 }: ReviewAnalyticsProps) {
 	const [drill, setDrill] = useState<DrillLevel>({ level: "tag" });
+	const terms = programTerms(useProgram());
 
 	const guideCritIds = new Set(guideCriteria.map((c) => c.id));
 	const panelCritIds = new Set(panelCriteria.map((c) => c.id));
@@ -560,7 +563,7 @@ function ReviewAnalyticsSection({
 		});
 
 		return (
-			<SectionCard title={`${group.name} — Group Detail`} icon={Users} adminOnly>
+			<SectionCard title={`${group.name} — ${terms.unit} Detail`} icon={Users} adminOnly>
 				{/* Breadcrumb */}
 				<button
 					onClick={() => setDrill({ level: "tag" })}
@@ -1142,7 +1145,7 @@ function ReviewAnalyticsSection({
 				/>
 				<StatPill
 					value={`${groupsEvaluated}/${groups.length}`}
-					label="Groups evaluated"
+					label={`${terms.units} evaluated`}
 					color="var(--brand-600)"
 				/>
 				<StatPill value={allStudentIds.size} label="Students scored" color="#4f46e5" />
@@ -1223,13 +1226,13 @@ function ReviewAnalyticsSection({
 
 			{/* Group rankings table */}
 			<p style={{ fontSize: "0.78rem", color: "hsl(var(--muted-foreground))", marginBottom: 10 }}>
-				Click a group to see per-student breakdown
+				Click a {terms.unitLower} to see per-student breakdown
 			</p>
 			<div style={{ overflowX: "auto" }}>
 				<table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
 					<thead>
 						<tr style={{ borderBottom: "1px solid hsl(var(--border))" }}>
-							{["#", "Group", "Guide %", "Panel %", "Combined", "Students", "Guide", ""].map(
+							{["#", terms.unit, "Guide %", "Panel %", "Combined", "Students", "Guide", ""].map(
 								(h) => (
 									<th
 										key={h}
@@ -1377,7 +1380,7 @@ export default function AnalyticsClient({
 	isAdmin,
 	facultyId,
 	facultyName,
-	groups,
+	groups: rawGroups,
 	students,
 	criteria,
 	guideCriteria,
@@ -1388,6 +1391,17 @@ export default function AnalyticsClient({
 	selectedReviewId,
 	groupReviewStatuses,
 }: Props) {
+	const program = useProgram();
+	const terms = programTerms(program);
+	// An M.Tech project is stored under the roll number; show the student's name
+	const groups =
+		program === "mtech"
+			? rawGroups.map((g) => ({
+					...g,
+					name: students.find((s) => s.group_id === g.id)?.name ?? g.name,
+				}))
+			: rawGroups;
+
 	// ── Personal stats ─────────────────────────────────────────────────────────
 
 	const myGradedStudentIds = new Set(myGrades.map((g) => g.student_id));
@@ -1664,10 +1678,14 @@ export default function AnalyticsClient({
 					>
 						<StatPill
 							value={groupsIEvaluated.length}
-							label="Teams fully graded"
+							label={`${terms.units} fully graded`}
 							color="var(--brand-600)"
 						/>
-						<StatPill value={groupsPartial.length} label="Teams in progress" color="#ca8a04" />
+						<StatPill
+							value={groupsPartial.length}
+							label={`${terms.units} in progress`}
+							color="#ca8a04"
+						/>
 						<StatPill
 							value={myGradedCount}
 							label={`of ${totalStudents} students`}
@@ -1773,7 +1791,7 @@ export default function AnalyticsClient({
 							/>
 							<StatPill
 								value={groupLeaderboard.length}
-								label={`of ${groups.filter((g) => g.project_type).length} teams evaluated`}
+								label={`of ${groups.filter((g) => g.project_type).length} ${terms.unitsLower} evaluated`}
 								color="var(--brand-600)"
 							/>
 							<StatPill
@@ -1892,7 +1910,7 @@ export default function AnalyticsClient({
 
 				{/* ── Admin: group leaderboard (panel) ── */}
 				{isAdmin && groupLeaderboard.length > 0 && (
-					<SectionCard title="Panel group rankings" icon={Award} adminOnly>
+					<SectionCard title={`Panel ${terms.unitLower} rankings`} icon={Award} adminOnly>
 						<p
 							style={{
 								fontSize: "0.78rem",
@@ -1906,7 +1924,7 @@ export default function AnalyticsClient({
 							<table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
 								<thead>
 									<tr style={{ borderBottom: "1px solid hsl(var(--border))" }}>
-										{["#", "Group", "Type", "Score", "Raters", "Spread", ""].map((h) => (
+										{["#", terms.unit, "Type", "Score", "Raters", "Spread", ""].map((h) => (
 											<th
 												key={h}
 												style={{
@@ -2015,7 +2033,7 @@ export default function AnalyticsClient({
 								marginBottom: 12,
 							}}
 						>
-							Breakdown of students and groups each panel reviewer has covered
+							Breakdown of students and {terms.unitsLower} each panel reviewer has covered
 						</p>
 						<div style={{ display: "grid", gap: 8 }}>
 							{facultyCoverage.map(({ profile: p, studentsGraded, groupsGraded }) => {
@@ -2072,7 +2090,7 @@ export default function AnalyticsClient({
 														marginLeft: 8,
 													}}
 												>
-													{studentsGraded} students · {groupsGraded} teams
+													{studentsGraded} students · {groupsGraded} {terms.unitsLower}
 												</span>
 											</div>
 											<HBar

@@ -11,6 +11,8 @@ import {
 	CartesianGrid,
 	Legend,
 } from "recharts";
+import { useProgram } from "@/components/ProgramContext";
+import { programTerms } from "@/lib/programs";
 
 export interface TagAnalyticsData {
 	id: string;
@@ -70,6 +72,7 @@ function CustomTooltip({ active, payload, label }: TooltipProps) {
 }
 
 export default function InstitutionAnalyticsClient({ tags }: Props) {
+	const terms = programTerms(useProgram());
 	const totalStudents = tags.reduce((s, t) => s + t.students, 0);
 	const totalGraded = tags.reduce((s, t) => s + t.graded, 0);
 	const institutionPct = totalStudents > 0 ? Math.round((totalGraded / totalStudents) * 100) : 0;
@@ -239,7 +242,7 @@ export default function InstitutionAnalyticsClient({ tags }: Props) {
 			<div className="dashboard-section">
 				<p className="eyebrow">Scale by TAG</p>
 				<h2 className="section-title" style={{ marginTop: 4, fontSize: "1.15rem" }}>
-					Groups and students per TAG
+					{terms.units} and students per TAG
 				</h2>
 				<p className="section-subtitle" style={{ marginBottom: 20 }}>
 					Distribution of project groups and enrolled students across TAGs.
@@ -256,7 +259,7 @@ export default function InstitutionAnalyticsClient({ tags }: Props) {
 						<BarChart
 							data={tags.map((t) => ({
 								name: t.short_name,
-								Groups: t.groups,
+								[terms.units]: t.groups,
 								Students: t.students,
 							}))}
 							margin={{ left: 8, right: 32, top: 0, bottom: 0 }}
@@ -274,7 +277,7 @@ export default function InstitutionAnalyticsClient({ tags }: Props) {
 								iconSize={8}
 								wrapperStyle={{ fontSize: "0.78rem", paddingTop: 16 }}
 							/>
-							<Bar dataKey="Groups" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+							<Bar dataKey={terms.units} fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
 							<Bar dataKey="Students" fill="#60a5fa" radius={[4, 4, 0, 0]} />
 						</BarChart>
 					</ResponsiveContainer>
@@ -309,7 +312,7 @@ export default function InstitutionAnalyticsClient({ tags }: Props) {
 								{[
 									"TAG",
 									"Faculty",
-									"Groups",
+									terms.units,
 									"Students",
 									"Graded",
 									"Progress",

@@ -26,6 +26,7 @@ import {
 	Lock,
 } from "lucide-react";
 import Link from "next/link";
+import { groupDisplayName } from "@/lib/programs";
 import { GradeTable } from "./GradeTable";
 import type { GradeCol, CritGroup } from "./GradeTable";
 import { FeedbackPanel } from "./FeedbackPanel";
@@ -307,7 +308,7 @@ export function GuideSheetClient({
 						</Link>
 						<div className="min-w-0">
 							<h1 className="font-bold text-sm md:text-base truncate leading-tight">
-								{group.name}
+								{groupDisplayName(group)}
 							</h1>
 							{group.project_title && (
 								<p className="text-xs text-muted-foreground truncate">{group.project_title}</p>
@@ -458,8 +459,8 @@ export function GuideSheetClient({
 									fontWeight: 500,
 								}}
 							>
-								This will mark {group.name} as approved and queue it for panel review. Save your
-								marks first if you haven&apos;t.
+								This will mark {groupDisplayName(group)} as approved and queue it for panel review.
+								Save your marks first if you haven&apos;t.
 							</p>
 							<div style={{ display: "flex", gap: 8 }}>
 								<Button

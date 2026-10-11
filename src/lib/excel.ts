@@ -1,5 +1,5 @@
 import * as XLSX from "xlsx-js-style";
-import type { Group, Student, Profile, Criteria, Grade, Feedback } from "@/types/database";
+import type { Group, Student, Profile, Criteria, Grade, Feedback, Program } from "@/types/database";
 
 // ── Import helpers ──────────────────────────────────────────────────────────
 
@@ -369,6 +369,12 @@ export interface ReportData {
 	criteria: Criteria[];
 	grades: Grade[];
 	feedback: Feedback[];
+	program?: Program;
+}
+
+/** Column label for one reviewed unit: a B.Tech group or an M.Tech project. */
+function unitLabel(data: ReportData): string {
+	return data.program === "mtech" ? "Project" : "Group";
 }
 
 export type ProjectType = "research" | "application" | "software";
@@ -437,7 +443,7 @@ function buildSheet(data: ReportData, projectType: ProjectType): Record<string, 
 	});
 
 	const headers: string[] = [
-		"Group",
+		unitLabel(data),
 		"Project Title",
 		"Project Type",
 		"Guide 1",
@@ -449,7 +455,7 @@ function buildSheet(data: ReportData, projectType: ProjectType): Record<string, 
 		"Max Marks",
 		"% Score",
 		"Student Comments",
-		"Group Comments",
+		`${unitLabel(data)} Comments`,
 	];
 
 	const aoa: (string | number | null)[][] = [
@@ -561,7 +567,7 @@ export function generateAllReport(data: ReportData): Blob {
 	});
 
 	const headers: string[] = [
-		"Group",
+		unitLabel(data),
 		"Project Title",
 		"Project Type",
 		"Guide 1",
@@ -576,7 +582,7 @@ export function generateAllReport(data: ReportData): Blob {
 		"Max Marks",
 		"% Score",
 		"Student Comments",
-		"Group Comments",
+		`${unitLabel(data)} Comments`,
 	];
 
 	const aoa: (string | number | null)[][] = [
@@ -681,7 +687,7 @@ export function generateAllReport(data: ReportData): Blob {
 	];
 
 	const wb = XLSX.utils.book_new();
-	XLSX.utils.book_append_sheet(wb, ws, "All Groups");
+	XLSX.utils.book_append_sheet(wb, ws, `All ${unitLabel(data)}s`);
 	const buf = XLSX.write(wb, { type: "array", bookType: "xlsx" });
 	return new Blob([buf], {
 		type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -728,7 +734,7 @@ export function generateAuditReport(data: ReportData): Blob {
 	});
 
 	const headers: string[] = [
-		"Group",
+		unitLabel(data),
 		"Project Title",
 		"Project Type",
 		"Roll Number",
@@ -890,7 +896,7 @@ function buildReviewSheet(
 		.sort((a, b) => a.order_index - b.order_index);
 
 	const headers: string[] = [
-		"Group",
+		unitLabel(data),
 		"Project Title",
 		"Project Type",
 		"Guide 1",
@@ -902,7 +908,7 @@ function buildReviewSheet(
 		"Max Marks",
 		"% Score",
 		"Student Comments",
-		"Group Comments",
+		`${unitLabel(data)} Comments`,
 	];
 
 	const aoa: (string | number | null)[][] = [
