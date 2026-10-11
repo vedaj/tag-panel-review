@@ -33,8 +33,5 @@ jobs:
           URL=$(npx vercel deploy --prod \
             --token=${{ secrets.VERCEL_TOKEN }} \
             --yes \
-            --env NEXT_PUBLIC_SUPABASE_URL="${{ secrets.TEST_SUPABASE_URL }}" \
-            --env NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.TEST_SUPABASE_ANON_KEY }}" \
-            --env SUPABASE_SERVICE_ROLE_KEY="${{ secrets.TEST_SUPABASE_SERVICE_ROLE_KEY }}" \
             --project=${{ secrets.VERCEL_TEST_PROJECT_ID }})
           echo "url=$URL" >> $GITHUB_OUTPUT
