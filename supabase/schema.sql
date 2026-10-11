@@ -204,10 +204,10 @@ CREATE POLICY "feedback_admin_read" ON feedback FOR SELECT USING (is_admin());
 -- ============================================================
 -- GUIDE REVIEW RLS (lives in migrations, not here)
 -- The guide-review tables, columns and policies are defined in
--- supabase/migrations/001_guide_review.sql, 002_reviews.sql and
--- 003_tighten_guide_rls.sql. The policy-reset loop above drops their
--- policies too, so re-apply 001–003 in order after running this file.
--- Final state after 003:
+-- supabase/migrations/001_guide_review.sql through 004_panel_project_type.sql.
+-- The policy-reset loop above drops their policies too, so re-apply
+-- 001–004 in order after running this file.
+-- Final state after 004:
 --   group_review_status
 --     grs_read   SELECT  any authenticated user
 --     grs_write  ALL     can_manage_group_review(group_id): the group's guide,
@@ -215,8 +215,10 @@ CREATE POLICY "feedback_admin_read" ON feedback FOR SELECT USING (is_admin());
 --                        institution_admin
 --   groups
 --     groups_guide_approve  UPDATE  guide1_id/guide2_id = auth.uid()
---     trigger groups_guide_column_guard (BEFORE UPDATE) rejects changes to any
---       column other than guide_approval_status / guide_approved_at /
---       guide_approved_by unless the caller is admin/institution_admin or there
---       is no JWT user (service role)
+--     groups_panel_update   UPDATE  caller is in panel_assignments for the group
+--     trigger groups_guide_column_guard (BEFORE UPDATE): non-admin callers may
+--       change only guide_approval_status / guide_approved_at /
+--       guide_approved_by (if guide) and project_type (if panel member).
+--       A guide who is also on the panel gets both. Admins, institution_admins
+--       and service-role calls (no JWT user) are not restricted.
 -- ============================================================
