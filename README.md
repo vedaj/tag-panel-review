@@ -90,10 +90,16 @@ SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 Apply the database migrations (in order):
 
 ```bash
-# In the Supabase SQL editor, run:
-# supabase/migrations/001_initial.sql
-# supabase/migrations/002_reviews.sql
+# Every file in supabase/migrations/, in filename (timestamp) order, e.g.:
+supabase db push
+# or paste each file into the Supabase SQL editor in order.
 ```
+
+Migration filenames start with the version recorded in the production
+database (`supabase_migrations.schema_migrations`). The Supabase GitHub
+integration fails if a remote version has no matching local file, so apply
+schema changes through migrations and commit the file under the version
+Supabase recorded.
 
 Then start the dev server:
 

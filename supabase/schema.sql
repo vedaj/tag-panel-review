@@ -204,9 +204,9 @@ CREATE POLICY "feedback_admin_read" ON feedback FOR SELECT USING (is_admin());
 -- ============================================================
 -- GUIDE REVIEW RLS (lives in migrations, not here)
 -- The guide-review tables, columns and policies are defined in
--- supabase/migrations/001_guide_review.sql through 004_panel_project_type.sql.
+-- supabase/migrations/*_001_guide_review.sql through *_004_panel_project_type.sql.
 -- The policy-reset loop above drops their policies too, so re-apply
--- 001–004 in order after running this file.
+-- 001–004 in order after running this file (or run every migration instead).
 -- Final state after 004:
 --   group_review_status
 --     grs_read   SELECT  any authenticated user
