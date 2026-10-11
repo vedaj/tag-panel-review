@@ -2,6 +2,19 @@
 
 A web-based grading portal built for engineering colleges that run a structured project review process across multiple Technology Advancement Groups (TAGs). Coordinators spend less time chasing spreadsheets and more time actually reviewing student work.
 
+**Live:** https://reviewarc.csamrita.org
+
+---
+
+## Deployments
+
+| Environment | URL | Deployed by |
+|---|---|---|
+| Production | https://reviewarc.csamrita.org | Vercel GitHub integration on every push to `main` |
+| Test | https://dev-reviewarc.csamrita.org | `deploy-test.yml` on pushes to `feature/**`, `fix/**` and `dev/**` |
+
+The old production URL, `ds.csamrita.org`, permanently redirects to `reviewarc.csamrita.org`.
+
 ---
 
 ## Why we built this
