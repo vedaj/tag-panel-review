@@ -18,25 +18,15 @@ import {
 	ShieldCheck,
 } from "lucide-react";
 import type { UserRow, TagOption } from "@/app/(dashboard)/admin/users/page";
-import type { Role } from "@/types/database";
-
-const ROLE_OPTIONS: { value: Role; label: string; description: string }[] = [
-	{
-		value: "faculty",
-		label: "Faculty",
-		description: "Can grade assigned groups and view their own analytics.",
-	},
-	{
-		value: "admin",
-		label: "TAG Admin",
-		description: "Manages users, groups, and rubrics within their TAG.",
-	},
-	{
-		value: "institution_admin",
-		label: "Institution Admin",
-		description: "Full institution-wide access across all TAGs.",
-	},
-];
+import { useAccess } from "@/components/AccessContext";
+import {
+	assignableRoles,
+	canManageUser,
+	hasRole,
+	roleLabels,
+	type AssignableRole,
+} from "@/lib/roles";
+import { programLabel } from "@/lib/programs";
 
 function formatDate(iso: string | null) {
 	if (!iso) return "—";
@@ -183,12 +173,9 @@ function SelectField({
 
 interface Props {
 	users: UserRow[];
-	currentUserId: string;
 	tags: TagOption[];
-	isInstitutionAdmin: boolean;
-	callerTagId: string | null;
 	createUser: (fd: FormData) => Promise<void>;
-	updateRole: (fd: FormData) => Promise<void>;
+	setRole: (fd: FormData) => Promise<void>;
 	moveToTag: (fd: FormData) => Promise<void>;
 	setPassword: (fd: FormData) => Promise<void>;
 	deleteUser: (fd: FormData) => Promise<void>;
@@ -196,16 +183,17 @@ interface Props {
 
 export function UsersClient({
 	users,
-	currentUserId,
 	tags,
-	isInstitutionAdmin,
-	callerTagId,
 	createUser,
-	updateRole,
+	setRole,
 	moveToTag,
 	setPassword,
 	deleteUser,
 }: Props) {
+	const access = useAccess();
+	const currentUserId = access.userId;
+	const isInstitutionAdmin = access.isInstitutionAdmin;
+	const callerTagId = access.tagId;
 	const router = useRouter();
 	const [isPending, startTransition] = useTransition();
 	const [showCreate, setShowCreate] = useState(false);
@@ -213,16 +201,24 @@ export function UsersClient({
 	const [moveUser, setMoveUser] = useState<UserRow | null>(null);
 	const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
 	const [roleUser, setRoleUser] = useState<UserRow | null>(null);
-	const [selectedRole, setSelectedRole] = useState<Role>("faculty");
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState<string | null>(null);
 	const createFormRef = useRef<HTMLFormElement>(null);
 	const pwdFormRef = useRef<HTMLFormElement>(null);
 	const moveFormRef = useRef<HTMLFormElement>(null);
 
-	function openRoleModal(u: UserRow) {
-		setSelectedRole(u.role as Role);
-		setRoleUser(u);
+	function toggleRole(u: UserRow, r: AssignableRole, grant: boolean) {
+		const fd = new FormData();
+		fd.append("userId", u.id);
+		fd.append("role", r.role);
+		fd.append("program", r.program ?? "");
+		fd.append("grant", String(grant));
+		act(
+			async () => {
+				await setRole(fd);
+			},
+			`${u.name || u.email}: ${r.label} ${grant ? "granted" : "removed"}`,
+		);
 	}
 
 	function flash(msg: string, type: "ok" | "err") {
@@ -266,7 +262,7 @@ export function UsersClient({
 				}}
 			>
 				<div>
-					<p className="eyebrow">{isInstitutionAdmin ? "Institution Admin" : "Admin"}</p>
+					<p className="eyebrow">{access.roleLabel}</p>
 					<h1 className="section-title" style={{ marginTop: 6 }}>
 						Users
 					</h1>
@@ -409,9 +405,11 @@ export function UsersClient({
 									<td style={{ padding: "10px 14px" }}>
 										<RolePill
 											user={u}
-											isMe={isMe}
+											canEdit={
+												!isMe && assignableRoles(access.roles, callerTagId, u.tag_id).length > 0
+											}
 											isPending={isPending}
-											onChangeRole={() => openRoleModal(u)}
+											onChangeRole={() => setRoleUser(u)}
 										/>
 									</td>
 									<td
@@ -457,29 +455,13 @@ export function UsersClient({
 													<ArrowRightLeft size={12} /> TAG
 												</button>
 											)}
-											<button
-												onClick={() => setPwdUser(u)}
-												title="Set password"
-												style={{
-													display: "inline-flex",
-													alignItems: "center",
-													gap: 4,
-													padding: "4px 10px",
-													borderRadius: 999,
-													fontSize: "0.72rem",
-													fontWeight: 600,
-													border: "1px solid hsl(var(--border))",
-													background: "hsl(var(--background))",
-													color: "hsl(var(--foreground))",
-													cursor: "pointer",
-												}}
-											>
-												<KeyRound size={12} /> Password
-											</button>
-											{!isMe && (
+											{canManageUser(access.roles, callerTagId, {
+												roles: u.roles,
+												tagId: u.tag_id,
+											}) && (
 												<button
-													onClick={() => setDeleteTarget(u)}
-													title="Delete user"
+													onClick={() => setPwdUser(u)}
+													title="Set password"
 													style={{
 														display: "inline-flex",
 														alignItems: "center",
@@ -488,15 +470,40 @@ export function UsersClient({
 														borderRadius: 999,
 														fontSize: "0.72rem",
 														fontWeight: 600,
-														border: "1px solid hsl(var(--destructive) / 0.3)",
-														background: "hsl(var(--destructive) / 0.06)",
-														color: "hsl(var(--destructive))",
+														border: "1px solid hsl(var(--border))",
+														background: "hsl(var(--background))",
+														color: "hsl(var(--foreground))",
 														cursor: "pointer",
 													}}
 												>
-													<Trash2 size={12} />
+													<KeyRound size={12} /> Password
 												</button>
 											)}
+											{!isMe &&
+												canManageUser(access.roles, callerTagId, {
+													roles: u.roles,
+													tagId: u.tag_id,
+												}) && (
+													<button
+														onClick={() => setDeleteTarget(u)}
+														title="Delete user"
+														style={{
+															display: "inline-flex",
+															alignItems: "center",
+															gap: 4,
+															padding: "4px 10px",
+															borderRadius: 999,
+															fontSize: "0.72rem",
+															fontWeight: 600,
+															border: "1px solid hsl(var(--destructive) / 0.3)",
+															background: "hsl(var(--destructive) / 0.06)",
+															color: "hsl(var(--destructive))",
+															cursor: "pointer",
+														}}
+													>
+														<Trash2 size={12} />
+													</button>
+												)}
 										</div>
 									</td>
 								</tr>
@@ -534,13 +541,23 @@ export function UsersClient({
 								minLength={8}
 							/>
 						</FormField>
-						<FormField label="Role">
-							<SelectField name="role" defaultValue="faculty">
-								<option value="faculty">Faculty</option>
-								<option value="admin">TAG Admin</option>
-								{isInstitutionAdmin && <option value="institution_admin">Institution Admin</option>}
-							</SelectField>
-						</FormField>
+						<label
+							style={{
+								display: "flex",
+								alignItems: "center",
+								gap: 8,
+								marginBottom: 16,
+								fontSize: "0.85rem",
+								cursor: "pointer",
+							}}
+						>
+							<input
+								type="checkbox"
+								name="tag_admin"
+								style={{ accentColor: "hsl(var(--primary))" }}
+							/>
+							Also make {programLabel(access.program)} TAG admin of this TAG
+						</label>
 						{isInstitutionAdmin && (
 							<FormField label="TAG">
 								<SelectField name="tag_id" defaultValue={callerTagId ?? ""}>
@@ -724,99 +741,77 @@ export function UsersClient({
 				</Modal>
 			)}
 
-			{/* Change role modal */}
+			{/* Roles modal */}
 			{roleUser && (
 				<Modal
-					title={`Change Role — ${roleUser.name || roleUser.email}`}
+					title={`Roles — ${roleUser.name || roleUser.email}`}
 					onClose={() => setRoleUser(null)}
 				>
 					<p
 						style={{ fontSize: "0.83rem", color: "hsl(var(--muted-foreground))", marginBottom: 16 }}
 					>
-						Select the role to assign to this user.
+						Everyone is faculty. Turn on the admin roles this person should also have.
+						{!roleUser.tag_id && " Put them in a TAG first to make them a TAG admin."}
 					</p>
 					<div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-						{ROLE_OPTIONS.filter((r) => isInstitutionAdmin || r.value !== "institution_admin").map(
-							(opt) => {
-								const active = selectedRole === opt.value;
-								return (
-									<label
-										key={opt.value}
-										style={{
-											display: "flex",
-											alignItems: "flex-start",
-											gap: 12,
-											padding: "12px 14px",
-											borderRadius: 10,
-											cursor: "pointer",
-											border: `1.5px solid ${active ? "hsl(var(--primary))" : "hsl(var(--border))"}`,
-											background: active ? "hsl(var(--primary) / 0.06)" : "hsl(var(--card))",
-											transition: "all 120ms ease",
-										}}
-									>
-										<input
-											type="radio"
-											name="role"
-											value={opt.value}
-											checked={active}
-											onChange={() => setSelectedRole(opt.value)}
-											style={{ marginTop: 3, accentColor: "hsl(var(--primary))" }}
-										/>
-										<div>
-											<div
-												style={{
-													fontSize: "0.88rem",
-													fontWeight: 700,
-													color: "var(--app-hero-text)",
-													marginBottom: 2,
-												}}
-											>
-												{opt.label}
-											</div>
-											<div
-												style={{
-													fontSize: "0.76rem",
-													color: "hsl(var(--muted-foreground))",
-													lineHeight: 1.4,
-												}}
-											>
-												{opt.description}
-											</div>
+						{assignableRoles(access.roles, callerTagId, roleUser.tag_id).map((r) => {
+							const current = users.find((u) => u.id === roleUser.id) ?? roleUser;
+							const active = hasRole(
+								current.roles,
+								r.role,
+								r.program,
+								r.role === "tag_admin" ? current.tag_id : undefined,
+							);
+							return (
+								<label
+									key={`${r.role}:${r.program ?? ""}`}
+									style={{
+										display: "flex",
+										alignItems: "flex-start",
+										gap: 12,
+										padding: "12px 14px",
+										borderRadius: 10,
+										cursor: isPending ? "wait" : "pointer",
+										border: `1.5px solid ${active ? "hsl(var(--primary))" : "hsl(var(--border))"}`,
+										background: active ? "hsl(var(--primary) / 0.06)" : "hsl(var(--card))",
+										transition: "all 120ms ease",
+									}}
+								>
+									<input
+										type="checkbox"
+										checked={active}
+										disabled={isPending}
+										onChange={(e) => toggleRole(current, r, e.target.checked)}
+										style={{ marginTop: 3, accentColor: "hsl(var(--primary))" }}
+									/>
+									<div>
+										<div
+											style={{
+												fontSize: "0.88rem",
+												fontWeight: 700,
+												color: "var(--app-hero-text)",
+												marginBottom: 2,
+											}}
+										>
+											{r.label}
 										</div>
-									</label>
-								);
-							},
-						)}
+										<div
+											style={{
+												fontSize: "0.76rem",
+												color: "hsl(var(--muted-foreground))",
+												lineHeight: 1.4,
+											}}
+										>
+											{r.description}
+										</div>
+									</div>
+								</label>
+							);
+						})}
 					</div>
 					<div style={{ display: "flex", gap: 8 }}>
-						<Button
-							className="flex-1 gap-2"
-							disabled={isPending || selectedRole === roleUser.role}
-							onClick={() => {
-								const fd = new FormData();
-								fd.append("userId", roleUser.id);
-								fd.append("role", selectedRole);
-								act(
-									async () => {
-										await updateRole(fd);
-									},
-									`${roleUser.name || roleUser.email} is now ${selectedRole}`,
-								);
-								setRoleUser(null);
-							}}
-						>
-							{isPending ? (
-								<>
-									<Loader2 size={14} className="animate-spin" /> Saving…
-								</>
-							) : (
-								<>
-									<ShieldCheck size={14} /> Assign Role
-								</>
-							)}
-						</Button>
-						<Button variant="outline" onClick={() => setRoleUser(null)}>
-							Cancel
+						<Button variant="outline" className="flex-1" onClick={() => setRoleUser(null)}>
+							Done
 						</Button>
 					</div>
 				</Modal>
@@ -827,28 +822,28 @@ export function UsersClient({
 
 function RolePill({
 	user,
-	isMe,
+	canEdit,
 	isPending,
 	onChangeRole,
 }: {
 	user: UserRow;
-	isMe: boolean;
+	canEdit: boolean;
 	isPending: boolean;
 	onChangeRole: () => void;
 }) {
-	const isInstAdmin = user.role === "institution_admin";
-	const isTagAdmin = user.role === "admin";
-	const label = isInstAdmin ? "Institution Admin" : isTagAdmin ? "TAG Admin" : "Faculty";
+	const labels = roleLabels(user.roles);
+	const isInstAdmin = hasRole(user.roles, "institution_admin");
+	const isAdmin = labels.length > 0;
 	const icon = isInstAdmin ? (
 		<Building2 size={11} />
-	) : isTagAdmin ? (
+	) : isAdmin ? (
 		<Shield size={11} />
 	) : (
 		<User size={11} />
 	);
 	const accent = isInstAdmin
 		? { bg: "hsl(327 73% 97%)", color: "hsl(336 75% 35%)", border: "hsl(327 60% 80%)" }
-		: isTagAdmin
+		: isAdmin
 			? {
 					bg: "hsl(var(--primary) / 0.1)",
 					color: "hsl(var(--primary))",
@@ -863,8 +858,8 @@ function RolePill({
 	return (
 		<button
 			onClick={onChangeRole}
-			disabled={isPending || isMe}
-			title={isMe ? "Cannot change your own role" : "Change role"}
+			disabled={isPending || !canEdit}
+			title={canEdit ? "Change roles" : labels.join(", ") || "Faculty"}
 			style={{
 				display: "inline-flex",
 				alignItems: "center",
@@ -876,14 +871,14 @@ function RolePill({
 				border: `1px solid ${accent.border}`,
 				background: accent.bg,
 				color: accent.color,
-				cursor: isMe ? "default" : "pointer",
+				cursor: canEdit ? "pointer" : "default",
 				opacity: isPending ? 0.5 : 1,
 				transition: "all 140ms ease",
 				whiteSpace: "nowrap",
 			}}
 		>
 			{icon}
-			{label}
+			{labels.length > 0 ? labels.join(" · ") : "Faculty"}
 		</button>
 	);
 }

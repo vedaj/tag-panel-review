@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { createContext, useContext, useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
 	Building2,
@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import type { Tag, Profile } from "@/types/database";
 import { useProgram } from "@/components/ProgramContext";
-import { programTerms } from "@/lib/programs";
+import { programLabel, programTerms } from "@/lib/programs";
 import {
 	createTagAction,
 	updateTagAction,
@@ -37,7 +37,15 @@ interface TagWithMembers extends Tag {
 interface Props {
 	tags: TagWithMembers[];
 	allProfiles: Profile[];
+	/** TAG admins in the active program */
+	tagAdminIds: string[];
+	institutionAdminIds: string[];
 }
+
+const RolesContext = createContext<{ tagAdmins: Set<string>; institutionAdmins: Set<string> }>({
+	tagAdmins: new Set(),
+	institutionAdmins: new Set(),
+});
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
 
@@ -67,8 +75,8 @@ function Initials({ name }: { name: string }) {
 	);
 }
 
-function RoleBadge({ role }: { role: string }) {
-	const isAdmin = role === "admin";
+function RoleBadge({ isAdmin }: { isAdmin: boolean }) {
+	const program = useProgram();
 	return (
 		<span
 			style={{
@@ -84,7 +92,7 @@ function RoleBadge({ role }: { role: string }) {
 				border: `1px solid ${isAdmin ? "hsl(var(--primary) / 0.2)" : "hsl(var(--border))"}`,
 			}}
 		>
-			{isAdmin ? "Admin" : "Faculty"}
+			{isAdmin ? `${programLabel(program)} Admin` : "Faculty"}
 		</span>
 	);
 }
@@ -160,7 +168,7 @@ function MemberRow({
 }) {
 	const [showMove, setShowMove] = useState(false);
 	const [targetTagId, setTargetTagId] = useState("");
-	const isAdmin = member.role === "admin";
+	const isAdmin = useContext(RolesContext).tagAdmins.has(member.id);
 
 	function handleMove() {
 		if (!targetTagId) return;
@@ -207,7 +215,7 @@ function MemberRow({
 						{member.email}
 					</p>
 				</div>
-				<RoleBadge role={member.role} />
+				<RoleBadge isAdmin={isAdmin} />
 				<div style={{ display: "flex", alignItems: "center", gap: 2, flexShrink: 0 }}>
 					{isAdmin ? (
 						<Btn size="xs" onClick={onDemote} disabled={pending}>
@@ -314,15 +322,16 @@ function AddMemberPicker({
 	onClose: () => void;
 }) {
 	const [search, setSearch] = useState("");
+	const { tagAdmins, institutionAdmins } = useContext(RolesContext);
 	const currentIds = new Set(currentMembers.map((m) => m.id));
 
 	const candidates = useMemo(() => {
 		const q = search.toLowerCase();
 		return allProfiles
-			.filter((p) => p.role !== "institution_admin" && !currentIds.has(p.id))
+			.filter((p) => !institutionAdmins.has(p.id) && !currentIds.has(p.id))
 			.filter((p) => !q || p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q))
 			.slice(0, 30);
-	}, [allProfiles, search, currentIds]);
+	}, [allProfiles, search, currentIds, institutionAdmins]);
 
 	return (
 		<div
@@ -446,7 +455,7 @@ function AddMemberPicker({
 									⚠ will move
 								</span>
 							)}
-							{p.role === "admin" && (
+							{tagAdmins.has(p.id) && (
 								<span
 									style={{
 										fontSize: "0.67rem",
@@ -481,7 +490,8 @@ function TagCard({
 	pending: boolean;
 	run: (fn: () => Promise<unknown>) => Promise<void>;
 }) {
-	const terms = programTerms(useProgram());
+	const program = useProgram();
+	const terms = programTerms(program);
 	const [editing, setEditing] = useState(false);
 	const [editName, setEditName] = useState(tag.name);
 	const [editShort, setEditShort] = useState(tag.short_name);
@@ -511,11 +521,11 @@ function TagCard({
 	}
 
 	async function handleElevate(profileId: string) {
-		await run(() => elevateToAdminAction(profileId));
+		await run(() => elevateToAdminAction(profileId, program));
 	}
 
 	async function handleDemote(profileId: string) {
-		await run(() => demoteToFacultyAction(profileId));
+		await run(() => demoteToFacultyAction(profileId, program));
 	}
 
 	async function handleMove(profileId: string, targetTagId: string) {
@@ -738,7 +748,20 @@ function TagCard({
 
 // ── Main component ─────────────────────────────────────────────────────────────
 
-export default function TagManager({ tags: initialTags, allProfiles: initialProfiles }: Props) {
+export default function TagManager(props: Props) {
+	const { tagAdminIds, institutionAdminIds } = props;
+	const roleSets = useMemo(
+		() => ({ tagAdmins: new Set(tagAdminIds), institutionAdmins: new Set(institutionAdminIds) }),
+		[tagAdminIds, institutionAdminIds],
+	);
+	return (
+		<RolesContext.Provider value={roleSets}>
+			<TagManagerInner {...props} />
+		</RolesContext.Provider>
+	);
+}
+
+function TagManagerInner({ tags: initialTags, allProfiles: initialProfiles }: Props) {
 	const router = useRouter();
 	const terms = programTerms(useProgram());
 	const [isPending, startTransition] = useTransition();
@@ -749,7 +772,10 @@ export default function TagManager({ tags: initialTags, allProfiles: initialProf
 	const [newName, setNewName] = useState("");
 	const [newShort, setNewShort] = useState("");
 
-	const unassigned = initialProfiles.filter((p) => !p.tag_id && p.role !== "institution_admin");
+	const roleSets = useContext(RolesContext);
+	const unassigned = initialProfiles.filter(
+		(p) => !p.tag_id && !roleSets.institutionAdmins.has(p.id),
+	);
 
 	const [assignToTagId, setAssignToTagId] = useState<Record<string, string>>({});
 

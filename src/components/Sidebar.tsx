@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Profile } from "@/types/database";
-import type { AdminScope } from "@/app/actions/scope";
+import type { Access } from "@/lib/roles";
 import {
 	GraduationCap,
 	LayoutDashboard,
@@ -24,6 +24,7 @@ interface NavItem {
 	adminOnly?: boolean;
 	institutionOnly?: boolean;
 	tagAdminOnly?: boolean;
+	programAdminOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
@@ -36,27 +37,26 @@ const navItems: NavItem[] = [
 	{ label: "Report", href: "/admin/report", icon: FileText, adminOnly: true },
 	{ label: "Users", href: "/admin/users", icon: UsersIcon, adminOnly: true },
 	{ label: "All TAGs", href: "/admin/institution", icon: Building2, institutionOnly: true },
-	{ label: "Reviews", href: "/admin/reviews", icon: CalendarRange, institutionOnly: true },
+	{ label: "Reviews", href: "/admin/reviews", icon: CalendarRange, programAdminOnly: true },
 ];
 
 interface SidebarProps {
 	profile: Profile | null;
 	open: boolean;
 	mobileOpen: boolean;
-	adminScope: AdminScope;
+	access: Access;
 	onMobileToggle: () => void;
 	onMobileClose: () => void;
 }
 
-export function Sidebar({ profile, open, mobileOpen, onMobileClose, adminScope }: SidebarProps) {
+export function Sidebar({ profile, open, mobileOpen, onMobileClose, access }: SidebarProps) {
 	const pathname = usePathname();
-	const isTagAdmin = profile?.role === "admin";
-	const isInstitutionAdmin = profile?.role === "institution_admin";
-
+	// All checks are for the active program (see buildAccess)
 	const visibleItems = navItems.filter((item) => {
-		if (item.institutionOnly) return isInstitutionAdmin;
-		if (item.tagAdminOnly) return isTagAdmin;
-		if (item.adminOnly) return isTagAdmin || isInstitutionAdmin;
+		if (item.institutionOnly) return access.isInstitutionAdmin;
+		if (item.programAdminOnly) return access.isInstitutionAdmin || access.isProgramAdmin;
+		if (item.tagAdminOnly) return access.isTagAdmin;
+		if (item.adminOnly) return access.isAdmin;
 		return true;
 	});
 
@@ -112,7 +112,7 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose, adminScope }
 						<div style={{ minWidth: 0 }}>
 							<h2 className="brand-mark">TAG Panel Review</h2>
 							<p className="brand-caption">
-								{isInstitutionAdmin && adminScope === "institution"
+								{access.tagFilter === null && access.isAdmin
 									? "All TAGs"
 									: tagLabel
 										? `${tagLabel} TAG`
@@ -169,7 +169,7 @@ export function Sidebar({ profile, open, mobileOpen, onMobileClose, adminScope }
 								<div>
 									<h2 className="brand-mark">TAG Panel Review</h2>
 									<p className="brand-caption">
-										{isInstitutionAdmin && adminScope === "institution"
+										{access.tagFilter === null && access.isAdmin
 											? "All TAGs"
 											: tagLabel
 												? `${tagLabel} TAG`

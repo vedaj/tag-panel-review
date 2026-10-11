@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase";
 import { useProgram } from "@/components/ProgramContext";
-import { programTerms } from "@/lib/programs";
+import { programLabel, programTerms } from "@/lib/programs";
 import {
 	parseStudentExcel,
 	parseFacultyExcel,
@@ -193,7 +193,6 @@ export default function ImportPage() {
 						options: {
 							data: {
 								name: row.name?.trim() ?? row.email.split("@")[0],
-								role: row.role?.trim() || "faculty",
 							},
 						},
 					});
@@ -204,18 +203,37 @@ export default function ImportPage() {
 					}
 
 					// Upsert profile directly too
-					const { error: profileErr } = await supabase.from("profiles").upsert(
-						{
-							id: authData?.user?.id,
-							name: row.name?.trim() ?? row.email.split("@")[0],
-							email: row.email.trim().toLowerCase(),
-							role: (row.role?.trim() as "admin" | "faculty") || "faculty",
-							tag_id: callerTagId,
-						},
-						{ onConflict: "email" },
-					);
+					const email = row.email.trim().toLowerCase();
+					const { data: profile, error: profileErr } = await supabase
+						.from("profiles")
+						.upsert(
+							{
+								id: authData?.user?.id,
+								name: row.name?.trim() ?? row.email.split("@")[0],
+								email,
+								tag_id: callerTagId,
+							},
+							{ onConflict: "email" },
+						)
+						.select("id")
+						.single();
 
-					if (!profileErr && authData?.user) facultyCreated++;
+					if (profileErr) {
+						errors.push(`Faculty "${row.email}": ${profileErr.message}`);
+						continue;
+					}
+
+					// role = admin makes them TAG admin of this TAG in the active program
+					if (row.role?.trim().toLowerCase() === "admin" && profile) {
+						const { error: roleErr } = await supabase.rpc("grant_role", {
+							target: profile.id,
+							r: "tag_admin",
+							p: program,
+						});
+						if (roleErr) errors.push(`Faculty "${row.email}" (TAG admin): ${roleErr.message}`);
+					}
+
+					if (authData?.user) facultyCreated++;
 				}
 			}
 
@@ -256,7 +274,7 @@ export default function ImportPage() {
 								<div>
 									<p className="font-medium text-blue-800">Faculty file:</p>
 									<code className="text-xs bg-white rounded px-1 py-0.5 text-blue-900 block mt-1">
-										name | email | role (admin/faculty)
+										name | email | role (admin/faculty — admin = {programLabel(program)} TAG admin)
 									</code>
 								</div>
 							</div>

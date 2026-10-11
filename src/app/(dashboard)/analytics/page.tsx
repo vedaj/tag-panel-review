@@ -1,8 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { createAdminSupabaseClient } from "@/lib/supabase-admin";
-import { effectiveTagFilter, getAdminScope } from "@/lib/admin-scope";
+import { getAccess } from "@/lib/access";
 import { getActiveTagReview } from "@/lib/review";
-import { getProgram } from "@/lib/program";
 import { redirect } from "next/navigation";
 import AnalyticsClient from "@/components/analytics/AnalyticsClient";
 import InstitutionAnalyticsClient, {
@@ -18,29 +17,27 @@ export default async function AnalyticsPage({
 }) {
 	const supabase = await createServerSupabaseClient();
 	const params = await searchParams;
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
-	if (!user) redirect("/login");
+	const access = await getAccess(supabase);
+	if (!access) redirect("/login");
+	const user = { id: access.userId };
 
 	const { data: profile } = await supabase
 		.from("profiles")
 		.select("*, tag:tags(*)")
 		.eq("id", user.id)
 		.single();
-	const isAdmin = profile?.role === "admin" || profile?.role === "institution_admin";
-	const tagId = await effectiveTagFilter(profile);
-	const program = (await getProgram()) ?? "btech";
+	const isAdmin = access.isAdmin;
+	const tagId = access.tagFilter;
+	const program = access.program;
 
-	// Institution admin in institution scope → cross-TAG analytics
-	if (profile?.role === "institution_admin" && !tagId) {
-		const adminScope = await getAdminScope();
-		if (adminScope === "institution") {
+	// Institution / program admin viewing every TAG → cross-TAG analytics
+	if (access.isInstitutionAdmin || access.isProgramAdmin) {
+		if (!tagId) {
 			const admin = createAdminSupabaseClient();
 			const [{ data: tags }, { data: profiles }, { data: groups }, { data: grades }] =
 				await Promise.all([
 					admin.from("tags").select("*").order("short_name"),
-					admin.from("profiles").select("id, role, tag_id"),
+					admin.from("profiles").select("id, tag_id"),
 					admin.from("groups").select("id, tag_id, students(id)").eq("program", program),
 					admin.from("grades").select("student_id, faculty_id").gt("marks", 0),
 				]);
@@ -77,7 +74,7 @@ export default async function AnalyticsPage({
 
 			const tagData: TagAnalyticsData[] = (tags ?? []).map((tag) => {
 				const tagProfiles = (profiles ?? []).filter(
-					(p: { tag_id: string | null; role: string }) => p.tag_id === tag.id,
+					(p: { tag_id: string | null }) => p.tag_id === tag.id,
 				);
 				const tagGroups = (groups ?? []).filter(
 					(g: { tag_id: string | null }) => g.tag_id === tag.id,
@@ -85,9 +82,8 @@ export default async function AnalyticsPage({
 				const allStudents = tagGroups.flatMap((g) => (g.students ?? []) as { id: string }[]);
 				const studentCount = allStudents.length;
 				const gradedCount = allStudents.filter((s) => gradedStudentSet.has(s.id)).length;
-				const facultyCount = tagProfiles.filter(
-					(p) => p.role === "faculty" || p.role === "admin",
-				).length;
+				// Every member is faculty, admins included
+				const facultyCount = tagProfiles.length;
 				const facultyGrading = gradingFacultyByTag[tag.id]?.size ?? 0;
 				const pct = studentCount > 0 ? Math.round((gradedCount / studentCount) * 100) : 0;
 				return {

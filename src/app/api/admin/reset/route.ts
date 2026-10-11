@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { createAdminSupabaseClient } from "@/lib/supabase-admin";
-import { getProgram } from "@/lib/program";
+import { getAccess } from "@/lib/access";
 
 // Keeps .in() filters short enough for the request URL
 function chunks<T>(items: T[], size = 200): T[][] {
@@ -12,28 +12,18 @@ function chunks<T>(items: T[], size = 200): T[][] {
 
 export async function POST(req: NextRequest) {
 	const supabase = await createServerSupabaseClient();
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
-	if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-	const { data: profile } = await supabase
-		.from("profiles")
-		.select("role, tag_id")
-		.eq("id", user.id)
-		.single();
-
-	if (!profile || !["admin", "institution_admin"].includes(profile.role)) {
-		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-	}
+	const access = await getAccess(supabase);
+	if (!access) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+	if (!access.isAdmin) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
 	const { clearType } = (await req.json()) as { clearType: boolean };
-	const program = (await getProgram()) ?? "btech";
+	const program = access.program;
 	const admin = createAdminSupabaseClient();
 
-	const isInstitutionAdmin = profile.role === "institution_admin";
-	const tagId: string | null = isInstitutionAdmin ? null : (profile.tag_id ?? null);
-	if (!isInstitutionAdmin && !tagId) {
+	// Same scope as the page: every TAG in the program for institution / program
+	// admins viewing all TAGs, otherwise only the user's own TAG
+	const tagId = access.tagFilter;
+	if (!access.isInstitutionAdmin && !access.isProgramAdmin && !tagId) {
 		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 	}
 

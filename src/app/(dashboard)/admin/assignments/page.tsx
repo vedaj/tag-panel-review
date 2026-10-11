@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { useProgram } from "@/components/ProgramContext";
+import { useAccess } from "@/components/AccessContext";
 import { groupDisplayName, programTerms } from "@/lib/programs";
 import type { Group, Profile } from "@/types/database";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -14,6 +15,7 @@ type Tab = "panel" | "guide";
 export default function AssignmentsPage() {
 	const supabase = createClient();
 	const program = useProgram();
+	const access = useAccess();
 	const terms = programTerms(program);
 
 	const [tab, setTab] = useState<Tab>("panel");
@@ -30,29 +32,19 @@ export default function AssignmentsPage() {
 
 	useEffect(() => {
 		loadData();
-	}, [program]); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [program, access.tagFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	async function loadData() {
 		setLoading(true);
-		const {
-			data: { user },
-		} = await supabase.auth.getUser();
-		let tagId: string | null = null;
-		if (user) {
-			const { data: profile } = await supabase
-				.from("profiles")
-				.select("tag_id, role")
-				.eq("id", user.id)
-				.single();
-			if (profile?.role !== "institution_admin") tagId = profile?.tag_id ?? null;
-		}
+		const tagId = access.tagFilter;
 
 		let groupsQ = supabase
 			.from("groups")
 			.select("*, students(name)")
 			.eq("program", program)
 			.order("name");
-		let facultyQ = supabase.from("profiles").select("*").eq("role", "faculty").order("name");
+		// Every TAG member can guide or sit on a panel, admins included
+		let facultyQ = supabase.from("profiles").select("*").order("name");
 		if (tagId) {
 			groupsQ = groupsQ.eq("tag_id", tagId);
 			facultyQ = facultyQ.eq("tag_id", tagId);
