@@ -200,3 +200,23 @@ CREATE POLICY "grades_admin_read" ON grades FOR SELECT USING (is_admin());
 -- feedback: faculty own rows; admin reads all
 CREATE POLICY "feedback_own"        ON feedback FOR ALL    USING (faculty_id = auth.uid());
 CREATE POLICY "feedback_admin_read" ON feedback FOR SELECT USING (is_admin());
+
+-- ============================================================
+-- GUIDE REVIEW RLS (lives in migrations, not here)
+-- The guide-review tables, columns and policies are defined in
+-- supabase/migrations/001_guide_review.sql, 002_reviews.sql and
+-- 003_tighten_guide_rls.sql. The policy-reset loop above drops their
+-- policies too, so re-apply 001–003 in order after running this file.
+-- Final state after 003:
+--   group_review_status
+--     grs_read   SELECT  any authenticated user
+--     grs_write  ALL     can_manage_group_review(group_id): the group's guide,
+--                        an admin whose tag_id matches the group's, or an
+--                        institution_admin
+--   groups
+--     groups_guide_approve  UPDATE  guide1_id/guide2_id = auth.uid()
+--     trigger groups_guide_column_guard (BEFORE UPDATE) rejects changes to any
+--       column other than guide_approval_status / guide_approved_at /
+--       guide_approved_by unless the caller is admin/institution_admin or there
+--       is no JWT user (service role)
+-- ============================================================
