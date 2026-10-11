@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 			await admin.from("feedback").delete().in("group_id", groupIds);
 
 			if (clearType) {
-				await admin.from("groups").update({ project_type: null }).in("id", groupIds);
+				await admin.from("groups").update({ project_type: "" }).in("id", groupIds);
 			}
 		}
 	} else {
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 		await admin.from("grades").delete().neq("id", DUMMY);
 		await admin.from("feedback").delete().neq("id", DUMMY);
 		if (clearType) {
-			await admin.from("groups").update({ project_type: null }).neq("id", DUMMY);
+			await admin.from("groups").update({ project_type: "" }).neq("id", DUMMY);
 		}
 	}
 

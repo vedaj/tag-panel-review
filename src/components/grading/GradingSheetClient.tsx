@@ -320,7 +320,7 @@ export function GradingSheetClient({
 				.eq("review_id", reviewId)
 				.eq("group_id", group.id);
 			if (clearType) {
-				await supabase.from("groups").update({ project_type: null }).eq("id", group.id);
+				await supabase.from("groups").update({ project_type: "" }).eq("id", group.id);
 				setProjectTypeState("");
 			}
 			setGrades({});
