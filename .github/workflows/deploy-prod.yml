@@ -1,4 +1,4 @@
-# Production (https://ds.csamrita.org) is deployed by Vercel's GitHub
+# Production (https://reviewarc.csamrita.org) is deployed by Vercel's GitHub
 # integration on pushes to main. This workflow only type-checks main.
 name: Type-check main
 
