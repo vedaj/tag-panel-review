@@ -142,16 +142,14 @@ export default function ImportPage() {
 					const groupId = groupMap.get(row.group_name?.trim());
 					if (!groupId) continue;
 
-					const { error } = await supabase
-						.from("students")
-						.upsert(
-							{
-								name: row.student_name?.trim(),
-								roll_number: row.roll_number?.trim(),
-								group_id: groupId,
-							},
-							{ onConflict: "roll_number" },
-						);
+					const { error } = await supabase.from("students").upsert(
+						{
+							name: row.student_name?.trim(),
+							roll_number: row.roll_number?.trim(),
+							group_id: groupId,
+						},
+						{ onConflict: "roll_number" },
+					);
 
 					if (error) {
 						errors.push(`Student "${row.student_name}": ${error.message}`);
