@@ -1,168 +1,168 @@
-export type Role = 'admin' | 'faculty' | 'institution_admin'
-export type ReviewStatus = 'upcoming' | 'active' | 'locked'
-export type UnlockRequestStatus = 'pending' | 'approved' | 'rejected'
+export type Role = "admin" | "faculty" | "institution_admin";
+export type ReviewStatus = "upcoming" | "active" | "locked";
+export type UnlockRequestStatus = "pending" | "approved" | "rejected";
 
 export interface Tag {
-  id: string
-  name: string
-  short_name: string
-  created_at: string
+	id: string;
+	name: string;
+	short_name: string;
+	created_at: string;
 }
 
 export interface Profile {
-  id: string
-  name: string
-  email: string
-  role: Role
-  tag_id: string | null
-  created_at: string
-  tag?: Tag
+	id: string;
+	name: string;
+	email: string;
+	role: Role;
+	tag_id: string | null;
+	created_at: string;
+	tag?: Tag;
 }
 
-export type ProjectType = 'research' | 'application' | 'software' | ''
-export type GuideApprovalStatus = 'pending' | 'approved'
+export type ProjectType = "research" | "application" | "software" | "";
+export type GuideApprovalStatus = "pending" | "approved";
 
 export interface Review {
-  id: string
-  name: string
-  order_index: number
-  created_by: string | null
-  created_at: string
+	id: string;
+	name: string;
+	order_index: number;
+	created_by: string | null;
+	created_at: string;
 }
 
 export interface TagReview {
-  id: string
-  tag_id: string
-  review_id: string
-  status: ReviewStatus
-  expires_at: string | null
-  activated_by: string | null
-  activated_at: string | null
-  locked_by: string | null
-  locked_at: string | null
-  created_at: string
-  review?: Review
-  tag?: Tag
+	id: string;
+	tag_id: string;
+	review_id: string;
+	status: ReviewStatus;
+	expires_at: string | null;
+	activated_by: string | null;
+	activated_at: string | null;
+	locked_by: string | null;
+	locked_at: string | null;
+	created_at: string;
+	review?: Review;
+	tag?: Tag;
 }
 
 export interface ReviewUnlockRequest {
-  id: string
-  tag_id: string
-  review_id: string
-  requested_by: string
-  reason: string | null
-  status: UnlockRequestStatus
-  reviewed_by: string | null
-  reviewed_at: string | null
-  created_at: string
-  review?: Review
-  tag?: Tag
-  requester?: Profile
+	id: string;
+	tag_id: string;
+	review_id: string;
+	requested_by: string;
+	reason: string | null;
+	status: UnlockRequestStatus;
+	reviewed_by: string | null;
+	reviewed_at: string | null;
+	created_at: string;
+	review?: Review;
+	tag?: Tag;
+	requester?: Profile;
 }
 
 export interface GroupReviewStatus {
-  id: string
-  group_id: string
-  review_id: string
-  guide_approval_status: GuideApprovalStatus
-  guide_approved_at: string | null
-  guide_approved_by: string | null
+	id: string;
+	group_id: string;
+	review_id: string;
+	guide_approval_status: GuideApprovalStatus;
+	guide_approved_at: string | null;
+	guide_approved_by: string | null;
 }
 
 export interface Group {
-  id: string
-  name: string
-  project_title: string
-  guide1: string
-  guide2: string | null
-  guide1_id: string | null
-  guide2_id: string | null
-  guide_approval_status: GuideApprovalStatus
-  guide_approved_at: string | null
-  guide_approved_by: string | null
-  project_type: ProjectType
-  tag_id?: string | null
-  created_at: string
-  students?: Student[]
-  panel_assignments?: PanelAssignment[]
-  guide1_profile?: Profile | null
-  guide2_profile?: Profile | null
+	id: string;
+	name: string;
+	project_title: string;
+	guide1: string;
+	guide2: string | null;
+	guide1_id: string | null;
+	guide2_id: string | null;
+	guide_approval_status: GuideApprovalStatus;
+	guide_approved_at: string | null;
+	guide_approved_by: string | null;
+	project_type: ProjectType;
+	tag_id?: string | null;
+	created_at: string;
+	students?: Student[];
+	panel_assignments?: PanelAssignment[];
+	guide1_profile?: Profile | null;
+	guide2_profile?: Profile | null;
 }
 
 export interface Student {
-  id: string
-  name: string
-  roll_number: string
-  group_id: string
-  created_at: string
-  group?: Group
+	id: string;
+	name: string;
+	roll_number: string;
+	group_id: string;
+	created_at: string;
+	group?: Group;
 }
 
-export type ReviewType = 'panel' | 'guide'
+export type ReviewType = "panel" | "guide";
 
 export interface Criteria {
-  id: string
-  review_id: string
-  title: string
-  description: string
-  max_marks: number
-  order_index: number
-  project_type: 'research' | 'application' | 'software' | 'all'
-  allowed_marks: string
-  review_type: ReviewType
-  tag_id?: string | null
-  created_at: string
-  sub_criteria?: SubCriteria[]
+	id: string;
+	review_id: string;
+	title: string;
+	description: string;
+	max_marks: number;
+	order_index: number;
+	project_type: "research" | "application" | "software" | "all";
+	allowed_marks: string;
+	review_type: ReviewType;
+	tag_id?: string | null;
+	created_at: string;
+	sub_criteria?: SubCriteria[];
 }
 
 export interface SubCriteria {
-  id: string
-  criteria_id: string
-  title: string
-  description: string
-  max_marks: number
-  order_index: number
-  allowed_marks: string
-  created_at: string
+	id: string;
+	criteria_id: string;
+	title: string;
+	description: string;
+	max_marks: number;
+	order_index: number;
+	allowed_marks: string;
+	created_at: string;
 }
 
 export interface PanelAssignment {
-  id: string
-  faculty_id: string
-  group_id: string
-  created_at: string
-  faculty?: Profile
-  group?: Group
+	id: string;
+	faculty_id: string;
+	group_id: string;
+	created_at: string;
+	faculty?: Profile;
+	group?: Group;
 }
 
 export interface Grade {
-  id: string
-  review_id: string
-  faculty_id: string
-  student_id: string
-  criteria_id: string
-  sub_criteria_id: string | null
-  marks: number
-  created_at: string
-  updated_at: string
+	id: string;
+	review_id: string;
+	faculty_id: string;
+	student_id: string;
+	criteria_id: string;
+	sub_criteria_id: string | null;
+	marks: number;
+	created_at: string;
+	updated_at: string;
 }
 
 export interface Feedback {
-  id: string
-  review_id: string
-  faculty_id: string
-  group_id: string
-  student_id: string | null
-  content: string
-  created_at: string
-  updated_at: string
+	id: string;
+	review_id: string;
+	faculty_id: string;
+	group_id: string;
+	student_id: string | null;
+	content: string;
+	created_at: string;
+	updated_at: string;
 }
 
 // UI helpers
 export interface GradeMap {
-  [key: string]: number // key: `${studentId}:${criteriaId}:${subCriteriaId|'null'}`
+	[key: string]: number; // key: `${studentId}:${criteriaId}:${subCriteriaId|'null'}`
 }
 
 export interface FeedbackMap {
-  [key: string]: string // key: `${groupId}:${studentId|'group'}`
+	[key: string]: string; // key: `${groupId}:${studentId|'group'}`
 }
