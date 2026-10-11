@@ -1,4 +1,6 @@
-name: Deploy to production
+# Production (https://ds.csamrita.org) is deployed by Vercel's GitHub
+# integration on pushes to main. This workflow only type-checks main.
+name: Type-check main
 
 on:
   push:
@@ -6,11 +8,8 @@ on:
       - main
 
 jobs:
-  deploy:
+  type-check:
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://ds.csamrita.org
 
     steps:
       - uses: actions/checkout@v4
@@ -24,10 +23,3 @@ jobs:
 
       - name: Type-check
         run: npx tsc --noEmit
-
-      - name: Deploy to production
-        run: |
-          npx vercel deploy --prod \
-            --token=${{ secrets.VERCEL_TOKEN }} \
-            --yes \
-            --project=${{ secrets.VERCEL_PROD_PROJECT_ID }}
