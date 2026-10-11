@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { createAdminSupabaseClient } from "@/lib/supabase-admin";
 import TagManager from "@/components/institution/TagManager";
+import { getProgram } from "@/lib/program";
 import type { Tag, Profile } from "@/types/database";
 
 interface TagWithMembers extends Tag {
@@ -25,11 +26,12 @@ export default async function InstitutionPage() {
 		.single();
 	if (profile?.role !== "institution_admin") redirect("/dashboard");
 
+	const program = (await getProgram()) ?? "btech";
 	const admin = createAdminSupabaseClient();
 	const [{ data: tags }, { data: profiles }, { data: groups }] = await Promise.all([
 		admin.from("tags").select("*").order("short_name"),
 		admin.from("profiles").select("*").order("name"),
-		admin.from("groups").select("id, tag_id"),
+		admin.from("groups").select("id, tag_id").eq("program", program),
 	]);
 
 	const groupCountByTag = ((groups ?? []) as { id: string; tag_id: string | null }[]).reduce<

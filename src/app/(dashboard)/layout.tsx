@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { DashboardShell } from "@/components/DashboardShell";
 import type { Tag } from "@/types/database";
 import { getAdminScope } from "@/lib/admin-scope";
+import { getProgram } from "@/lib/program";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
 	const supabase = await createServerSupabaseClient();
@@ -12,6 +13,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
 	if (!user) {
 		redirect("/login");
+	}
+
+	const program = await getProgram();
+	if (!program) {
+		redirect("/choose-program");
 	}
 
 	const { data: profile } = await supabase
@@ -27,7 +33,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 	const adminScope = profile?.role === "institution_admin" ? await getAdminScope() : "tag";
 
 	return (
-		<DashboardShell profile={profile} tags={tags ?? []} adminScope={adminScope}>
+		<DashboardShell profile={profile} tags={tags ?? []} adminScope={adminScope} program={program}>
 			{children}
 		</DashboardShell>
 	);

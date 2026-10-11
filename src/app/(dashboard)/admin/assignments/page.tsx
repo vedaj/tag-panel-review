@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
+import { useProgram } from "@/components/ProgramContext";
 import type { Group, Profile } from "@/types/database";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,7 @@ type Tab = "panel" | "guide";
 
 export default function AssignmentsPage() {
 	const supabase = createClient();
+	const program = useProgram();
 
 	const [tab, setTab] = useState<Tab>("panel");
 	const [groups, setGroups] = useState<Group[]>([]);
@@ -26,7 +28,7 @@ export default function AssignmentsPage() {
 
 	useEffect(() => {
 		loadData();
-	}, []); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [program]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	async function loadData() {
 		setLoading(true);
@@ -43,7 +45,7 @@ export default function AssignmentsPage() {
 			if (profile?.role !== "institution_admin") tagId = profile?.tag_id ?? null;
 		}
 
-		let groupsQ = supabase.from("groups").select("*").order("name");
+		let groupsQ = supabase.from("groups").select("*").eq("program", program).order("name");
 		let facultyQ = supabase.from("profiles").select("*").eq("role", "faculty").order("name");
 		if (tagId) {
 			groupsQ = groupsQ.eq("tag_id", tagId);

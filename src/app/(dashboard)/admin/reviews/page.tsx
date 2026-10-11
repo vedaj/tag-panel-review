@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
+import { useProgram } from "@/components/ProgramContext";
 import type { Review, TagReview, Tag, ReviewUnlockRequest } from "@/types/database";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ type UnlockRequestWithRelations = ReviewUnlockRequest & {
 
 export default function ReviewsPage() {
 	const supabase = createClient();
+	const program = useProgram();
 	const [reviews, setReviews] = useState<Review[]>([]);
 	const [tagReviews, setTagReviews] = useState<TagReviewWithRelations[]>([]);
 	const [tags, setTags] = useState<Tag[]>([]);
@@ -29,20 +31,22 @@ export default function ReviewsPage() {
 
 	useEffect(() => {
 		loadData();
-	}, []); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [program]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	async function loadData() {
 		setLoading(true);
 		const [{ data: rv }, { data: tr }, { data: tg }, { data: ur }] = await Promise.all([
-			supabase.from("reviews").select("*").order("order_index"),
+			supabase.from("reviews").select("*").eq("program", program).order("order_index"),
 			supabase
 				.from("tag_reviews")
-				.select("*, review:review_id(*), tag:tag_id(*)")
+				.select("*, review:review_id!inner(*), tag:tag_id(*)")
+				.eq("review.program", program)
 				.order("created_at"),
 			supabase.from("tags").select("*").order("name"),
 			supabase
 				.from("review_unlock_requests")
-				.select("*, review:review_id(*), tag:tag_id(*), requester:requested_by(name, email)")
+				.select("*, review:review_id!inner(*), tag:tag_id(*), requester:requested_by(name, email)")
+				.eq("review.program", program)
 				.eq("status", "pending")
 				.order("created_at", { ascending: false }),
 		]);
@@ -58,7 +62,7 @@ export default function ReviewsPage() {
 		setCreating(true);
 		const { data: rv } = await supabase
 			.from("reviews")
-			.insert({ name: newReviewName.trim(), order_index: reviews.length })
+			.insert({ name: newReviewName.trim(), order_index: reviews.length, program })
 			.select()
 			.single();
 		if (rv) {

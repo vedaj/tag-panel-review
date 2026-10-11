@@ -1,6 +1,7 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
+import { useProgram } from "@/components/ProgramContext";
 import {
 	generateAllReport,
 	generateProjectTypeReport,
@@ -64,11 +65,17 @@ const PROJECT_TYPES: { key: ProjectType; label: string; icon: React.ReactNode; c
 
 export default function ReportPage() {
 	const supabase = createClient();
+	const program = useProgram();
 	const [stats, setStats] = useState<Stats | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [downloading, setDownloading] = useState<DownloadKey | null>(null);
 	const [confirmReset, setConfirmReset] = useState(false);
 	const [resetting, setResetting] = useState(false);
+
+	// Stats belong to one program; drop them when the user switches
+	useEffect(() => {
+		setStats(null);
+	}, [program]);
 
 	async function loadStats() {
 		setLoading(true);
@@ -87,7 +94,7 @@ export default function ReportPage() {
 			if (profile?.role !== "institution_admin") tagId = profile?.tag_id ?? null;
 		}
 
-		let groupsQ = supabase.from("groups").select("*").order("name");
+		let groupsQ = supabase.from("groups").select("*").eq("program", program).order("name");
 		let facultyQ = supabase.from("profiles").select("*");
 		if (tagId) {
 			groupsQ = groupsQ.eq("tag_id", tagId);
@@ -124,9 +131,13 @@ export default function ReportPage() {
 			if (profile?.role !== "institution_admin") tagId = profile?.tag_id ?? null;
 		}
 
-		let groupsQ = supabase.from("groups").select("*").order("name");
+		let groupsQ = supabase.from("groups").select("*").eq("program", program).order("name");
 		let facultyQ = supabase.from("profiles").select("*");
-		let criteriaQ = supabase.from("criteria").select("*, sub_criteria(*)").order("order_index");
+		let criteriaQ = supabase
+			.from("criteria")
+			.select("*, sub_criteria(*), review:review_id!inner(program)")
+			.eq("review.program", program)
+			.order("order_index");
 		if (tagId) {
 			groupsQ = groupsQ.eq("tag_id", tagId);
 			facultyQ = facultyQ.eq("tag_id", tagId);

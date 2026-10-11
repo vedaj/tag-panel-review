@@ -1,19 +1,22 @@
 "use client";
 import { useState, useEffect } from "react";
-import type { Profile, Tag } from "@/types/database";
+import type { Profile, Program, Tag } from "@/types/database";
 import type { AdminScope } from "@/app/actions/scope";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
+import { ProgramProvider } from "./ProgramContext";
 
 export function DashboardShell({
 	profile,
 	tags,
 	adminScope,
+	program,
 	children,
 }: {
 	profile: Profile | null;
 	tags: Tag[];
 	adminScope: AdminScope;
+	program: Program;
 	children: React.ReactNode;
 }) {
 	const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -54,11 +57,14 @@ export function DashboardShell({
 					profile={profile}
 					tags={tags}
 					adminScope={adminScope}
+					program={program}
 					sidebarOpen={sidebarOpen}
 					onDesktopToggle={toggleDesktop}
 					onMobileToggle={() => setMobileOpen((v) => !v)}
 				/>
-				<div className="page-content">{children}</div>
+				<div className="page-content">
+					<ProgramProvider program={program}>{children}</ProgramProvider>
+				</div>
 			</div>
 		</div>
 	);

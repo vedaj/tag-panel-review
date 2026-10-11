@@ -169,6 +169,68 @@ body {
 	font-size: 0.9rem;
 }
 
+/* ─── Program chooser (after login) ──────────────────────────────────────── */
+.program-choice {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	width: 100%;
+	padding: 16px 20px;
+	border-radius: 14px;
+	border: 1px solid var(--app-panel-border);
+	background: var(--app-panel-strong);
+	cursor: pointer;
+	text-align: left;
+	transition:
+		border-color 140ms ease,
+		transform 140ms ease;
+}
+
+.program-choice:hover,
+.program-choice:focus-visible {
+	border-color: hsl(var(--primary));
+	transform: translateY(-1px);
+}
+
+.program-choice.is-current {
+	border-color: hsl(var(--primary) / 0.5);
+}
+
+.program-choice-icon {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 44px;
+	height: 44px;
+	border-radius: 12px;
+	background: var(--app-accent-soft);
+	color: var(--app-kicker);
+	flex-shrink: 0;
+}
+
+.program-choice-label {
+	display: block;
+	font-weight: 600;
+	color: var(--app-hero-text);
+}
+
+.program-choice-description {
+	display: block;
+	font-size: 0.82rem;
+	color: var(--app-hero-subtext);
+	margin-top: 2px;
+}
+
+.program-choice-badge {
+	margin-left: auto;
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.72rem;
+	color: var(--app-kicker);
+	white-space: nowrap;
+}
+
 /* ─── App shell (dashboard wrapper) ─────────────────────────────────────── */
 .app-shell {
 	min-height: 100vh;
@@ -642,6 +704,43 @@ body {
 }
 
 /* ─── Topbar TAG badge ───────────────────────────────────────────────────── */
+.program-switch {
+	display: inline-flex;
+	margin-left: 10px;
+	padding: 3px;
+	gap: 2px;
+	border-radius: 999px;
+	border: 1px solid var(--app-panel-border);
+	background: var(--app-panel);
+}
+
+.program-switch-btn {
+	border: none;
+	background: transparent;
+	padding: 4px 12px;
+	border-radius: 999px;
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: var(--app-hero-subtext);
+	cursor: pointer;
+	transition:
+		background 140ms ease,
+		color 140ms ease;
+}
+
+.program-switch-btn:hover:not(.is-active) {
+	color: var(--app-hero-text);
+}
+
+.program-switch-btn.is-active {
+	background: var(--app-accent-soft);
+	color: var(--app-kicker);
+}
+
+.program-switch-btn:disabled {
+	cursor: wait;
+}
+
 .topbar-tag-badge {
 	display: inline-flex;
 	align-items: center;

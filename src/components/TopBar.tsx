@@ -14,7 +14,9 @@ import {
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
 import { setAdminScope } from "@/app/actions/scope";
-import type { Profile, Tag as TagType } from "@/types/database";
+import { setProgram } from "@/app/actions/program";
+import { PROGRAMS } from "@/lib/programs";
+import type { Profile, Program, Tag as TagType } from "@/types/database";
 import type { AdminScope } from "@/app/actions/scope";
 
 type Theme = "light" | "dark";
@@ -24,6 +26,7 @@ export function TopBar({
 	profile,
 	tags,
 	adminScope,
+	program,
 	sidebarOpen,
 	onDesktopToggle,
 	onMobileToggle,
@@ -31,6 +34,7 @@ export function TopBar({
 	profile: Profile | null;
 	tags: TagType[];
 	adminScope: AdminScope;
+	program: Program;
 	sidebarOpen: boolean;
 	onDesktopToggle: () => void;
 	onMobileToggle: () => void;
@@ -39,6 +43,8 @@ export function TopBar({
 	const [theme, setTheme] = useState<Theme>("light");
 	const [fontMode, setFontMode] = useState<FontMode>("serif");
 	const [scope, setScope] = useState<AdminScope>(adminScope);
+	const [activeProgram, setActiveProgram] = useState<Program>(program);
+	const [switchingProgram, startProgramTransition] = useTransition();
 	const [, startTransition] = useTransition();
 	const menuRef = useRef<HTMLDivElement>(null);
 	const router = useRouter();
@@ -56,6 +62,10 @@ export function TopBar({
 		} catch {}
 		setScope(adminScope);
 	}, [adminScope]);
+
+	useEffect(() => {
+		setActiveProgram(program);
+	}, [program]);
 
 	useEffect(() => {
 		function onClickOutside(e: MouseEvent) {
@@ -87,6 +97,15 @@ export function TopBar({
 		setScope(s);
 		startTransition(async () => {
 			await setAdminScope(s);
+			router.refresh();
+		});
+	}
+
+	function applyProgram(p: Program) {
+		if (p === activeProgram) return;
+		setActiveProgram(p);
+		startProgramTransition(async () => {
+			await setProgram(p);
 			router.refresh();
 		});
 	}
@@ -147,6 +166,28 @@ export function TopBar({
 					)}
 				</div>
 			)}
+
+			{/* B.Tech / M.Tech switch */}
+			<div
+				className="program-switch"
+				role="group"
+				aria-label="Program"
+				aria-busy={switchingProgram}
+			>
+				{PROGRAMS.map(({ value, label, description }) => (
+					<button
+						key={value}
+						type="button"
+						className={`program-switch-btn${activeProgram === value ? " is-active" : ""}`}
+						aria-pressed={activeProgram === value}
+						title={`${label}: ${description}`}
+						disabled={switchingProgram}
+						onClick={() => applyProgram(value)}
+					>
+						{label}
+					</button>
+				))}
+			</div>
 
 			{/* User menu — always visible */}
 			<div style={{ position: "relative", marginLeft: "auto" }} ref={menuRef}>

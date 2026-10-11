@@ -45,7 +45,9 @@ export default async function GuidePage({ params }: Props) {
 
 	// Resolve active review
 	const tagId = group.tag_id ?? profile?.tag_id ?? null;
-	const activeReview = tagId ? await getActiveTagReview(supabase, tagId) : null;
+	const activeReview = tagId
+		? await getActiveTagReview(supabase, tagId, group.program ?? "btech")
+		: null;
 	const isLocked = !activeReview || isExpired(activeReview.expiresAt);
 	const reviewId = activeReview?.reviewId ?? null;
 

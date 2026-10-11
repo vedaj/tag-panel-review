@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef } from "react";
 import { createClient } from "@/lib/supabase";
+import { useProgram } from "@/components/ProgramContext";
 import {
 	parseStudentExcel,
 	parseFacultyExcel,
@@ -33,6 +34,7 @@ interface ImportResult {
 
 export default function ImportPage() {
 	const supabase = createClient();
+	const program = useProgram();
 	const studentFileRef = useRef<HTMLInputElement>(null);
 	const facultyFileRef = useRef<HTMLInputElement>(null);
 
@@ -97,8 +99,9 @@ export default function ImportPage() {
 					const { data: existing } = await supabase
 						.from("groups")
 						.select("id")
+						.eq("program", program)
 						.eq("name", groupName)
-						.single();
+						.maybeSingle();
 
 					if (existing) {
 						groupMap.set(groupName, existing.id);
@@ -120,6 +123,7 @@ export default function ImportPage() {
 								guide1: first.guide1?.trim() ?? "",
 								guide2: first.guide2?.trim() || null,
 								tag_id: callerTagId,
+								program,
 							})
 							.select("id")
 							.single();
@@ -138,14 +142,16 @@ export default function ImportPage() {
 					const groupId = groupMap.get(row.group_name?.trim());
 					if (!groupId) continue;
 
-					const { error } = await supabase.from("students").upsert(
-						{
-							name: row.student_name?.trim(),
-							roll_number: row.roll_number?.trim(),
-							group_id: groupId,
-						},
-						{ onConflict: "roll_number" },
-					);
+					const { error } = await supabase
+						.from("students")
+						.upsert(
+							{
+								name: row.student_name?.trim(),
+								roll_number: row.roll_number?.trim(),
+								group_id: groupId,
+							},
+							{ onConflict: "roll_number" },
+						);
 
 					if (error) {
 						errors.push(`Student "${row.student_name}": ${error.message}`);

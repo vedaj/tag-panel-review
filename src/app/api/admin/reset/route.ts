@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { createAdminSupabaseClient } from "@/lib/supabase-admin";
+import { getProgram } from "@/lib/program";
+
+// Keeps .in() filters short enough for the request URL
+function chunks<T>(items: T[], size = 200): T[][] {
+	const out: T[][] = [];
+	for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+	return out;
+}
 
 export async function POST(req: NextRequest) {
 	const supabase = await createServerSupabaseClient();
@@ -20,39 +28,30 @@ export async function POST(req: NextRequest) {
 	}
 
 	const { clearType } = (await req.json()) as { clearType: boolean };
+	const program = (await getProgram()) ?? "btech";
 	const admin = createAdminSupabaseClient();
 
 	const isInstitutionAdmin = profile.role === "institution_admin";
 	const tagId: string | null = isInstitutionAdmin ? null : (profile.tag_id ?? null);
+	if (!isInstitutionAdmin && !tagId) {
+		return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+	}
 
-	if (tagId) {
-		// Scoped reset: only touch this TAG's data
-		const { data: groups } = await admin.from("groups").select("id").eq("tag_id", tagId);
+	// Only the active program's groups (and, for TAG admins, only their TAG)
+	let groupsQuery = admin.from("groups").select("id").eq("program", program);
+	if (tagId) groupsQuery = groupsQuery.eq("tag_id", tagId);
+	const { data: groups } = await groupsQuery;
+	const groupIds = (groups ?? []).map((g: { id: string }) => g.id);
 
-		const groupIds = (groups ?? []).map((g: { id: string }) => g.id);
-
-		if (groupIds.length > 0) {
-			const { data: students } = await admin.from("students").select("id").in("group_id", groupIds);
-
-			const studentIds = (students ?? []).map((s: { id: string }) => s.id);
-
-			if (studentIds.length > 0) {
-				await admin.from("grades").delete().in("student_id", studentIds);
-			}
-
-			await admin.from("feedback").delete().in("group_id", groupIds);
-
-			if (clearType) {
-				await admin.from("groups").update({ project_type: "" }).in("id", groupIds);
-			}
+	for (const ids of chunks(groupIds)) {
+		const { data: students } = await admin.from("students").select("id").in("group_id", ids);
+		const studentIds = (students ?? []).map((s: { id: string }) => s.id);
+		for (const sIds of chunks(studentIds)) {
+			await admin.from("grades").delete().in("student_id", sIds);
 		}
-	} else {
-		// Institution-wide reset
-		const DUMMY = "00000000-0000-0000-0000-000000000000";
-		await admin.from("grades").delete().neq("id", DUMMY);
-		await admin.from("feedback").delete().neq("id", DUMMY);
+		await admin.from("feedback").delete().in("group_id", ids);
 		if (clearType) {
-			await admin.from("groups").update({ project_type: "" }).neq("id", DUMMY);
+			await admin.from("groups").update({ project_type: "" }).in("id", ids);
 		}
 	}
 

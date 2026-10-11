@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { createAdminSupabaseClient } from "@/lib/supabase-admin";
 import { effectiveTagFilter, getAdminScope } from "@/lib/admin-scope";
 import { getActiveTagReview } from "@/lib/review";
+import { getProgram } from "@/lib/program";
 import { redirect } from "next/navigation";
 import AnalyticsClient from "@/components/analytics/AnalyticsClient";
 import InstitutionAnalyticsClient, {
@@ -29,6 +30,7 @@ export default async function AnalyticsPage({
 		.single();
 	const isAdmin = profile?.role === "admin" || profile?.role === "institution_admin";
 	const tagId = await effectiveTagFilter(profile);
+	const program = (await getProgram()) ?? "btech";
 
 	// Institution admin in institution scope → cross-TAG analytics
 	if (profile?.role === "institution_admin" && !tagId) {
@@ -39,7 +41,7 @@ export default async function AnalyticsPage({
 				await Promise.all([
 					admin.from("tags").select("*").order("short_name"),
 					admin.from("profiles").select("id, role, tag_id"),
-					admin.from("groups").select("id, tag_id, students(id)"),
+					admin.from("groups").select("id, tag_id, students(id)").eq("program", program),
 					admin.from("grades").select("student_id, faculty_id").gt("marks", 0),
 				]);
 
@@ -65,6 +67,8 @@ export default async function AnalyticsPage({
 				gradingFacultyByTag[tag.id] = new Set();
 			}
 			for (const grade of grades ?? []) {
+				// Only count grading of this program's students
+				if (!studentTagMap.has(grade.student_id)) continue;
 				const tagId2 = facultyTagMap.get(grade.faculty_id);
 				if (tagId2 && gradingFacultyByTag[tagId2]) {
 					gradingFacultyByTag[tagId2].add(grade.faculty_id);
@@ -108,14 +112,19 @@ export default async function AnalyticsPage({
 	const { data: reviewsList } = await supabase
 		.from("reviews")
 		.select("id, name, order_index")
+		.eq("program", program)
 		.order("order_index");
-	const activeReview = tagId ? await getActiveTagReview(supabase, tagId) : null;
+	const activeReview = tagId ? await getActiveTagReview(supabase, tagId, program) : null;
+	// A reviewId left in the URL from the other program is ignored
+	const requestedReviewId = (reviewsList ?? []).some((r) => r.id === params.reviewId)
+		? params.reviewId
+		: null;
 	const selectedReviewId =
-		params.reviewId || activeReview?.reviewId || (reviewsList ?? [])[0]?.id || null;
+		requestedReviewId || activeReview?.reviewId || (reviewsList ?? [])[0]?.id || null;
 
 	// ── Data queries ─────────────────────────────────────────────────────────────
 
-	let groupsQuery = supabase.from("groups").select("*").order("name");
+	let groupsQuery = supabase.from("groups").select("*").eq("program", program).order("name");
 	if (tagId) groupsQuery = groupsQuery.eq("tag_id", tagId);
 
 	// Panel criteria for existing analytics sections

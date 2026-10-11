@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
+import { useProgram } from "@/components/ProgramContext";
 import type { Criteria, SubCriteria, Review } from "@/types/database";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,7 @@ const PROJECT_TYPE_OPTIONS = [
 
 export default function RubricsPage() {
 	const supabase = createClient();
+	const program = useProgram();
 	const [activeTab, setActiveTab] = useState<Tab>("panel");
 	const [reviews, setReviews] = useState<Review[]>([]);
 	const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
@@ -47,19 +49,26 @@ export default function RubricsPage() {
 			setCallerTagId(profile?.tag_id ?? null);
 			setCallerRole(profile?.role ?? null);
 
-			const { data: rv } = await supabase.from("reviews").select("*").order("order_index");
+			const { data: rv } = await supabase
+				.from("reviews")
+				.select("*")
+				.eq("program", program)
+				.order("order_index");
 			const reviewList = rv ?? [];
 			setReviews(reviewList);
 			if (reviewList.length > 0) {
 				setSelectedReviewId(reviewList[0].id);
 				await loadCriteria(reviewList[0].id, profile?.tag_id ?? null);
 			} else {
+				// This program has no reviews yet
+				setSelectedReviewId(null);
+				setCriteria([]);
 				setLoading(false);
 			}
 		}
 		init();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	}, [program]);
 
 	async function loadCriteria(reviewId: string, tagId?: string | null) {
 		setLoading(true);

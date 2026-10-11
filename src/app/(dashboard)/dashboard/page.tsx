@@ -1,6 +1,8 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { createAdminSupabaseClient } from "@/lib/supabase-admin";
 import { effectiveTagFilter } from "@/lib/admin-scope";
+import { getProgram } from "@/lib/program";
+import type { Program } from "@/types/database";
 import Link from "next/link";
 import {
 	ClipboardList,
@@ -112,13 +114,21 @@ function GroupCard({
 	);
 }
 
-async function InstitutionDashboard({ name, tagCount }: { name: string; tagCount: number }) {
+async function InstitutionDashboard({
+	name,
+	tagCount,
+	program,
+}: {
+	name: string;
+	tagCount: number;
+	program: Program;
+}) {
 	const admin = createAdminSupabaseClient();
 	const [{ data: tags }, { data: profiles }, { data: groups }, { data: grades }] =
 		await Promise.all([
 			admin.from("tags").select("*").order("short_name"),
 			admin.from("profiles").select("id, role, tag_id"),
-			admin.from("groups").select("id, tag_id, students(id)"),
+			admin.from("groups").select("id, tag_id, students(id)").eq("program", program),
 			admin.from("grades").select("student_id").gt("marks", 0),
 		]);
 
@@ -358,18 +368,28 @@ export default async function DashboardPage() {
 
 	const isAdmin = profile?.role === "admin" || profile?.role === "institution_admin";
 	const tagId = await effectiveTagFilter(profile);
+	const program = (await getProgram()) ?? "btech";
 
 	// Institution admin in institution-wide scope → show TAG overview
 	if (profile?.role === "institution_admin" && !tagId) {
 		const { data: tags } = await supabase.from("tags").select("id");
-		return <InstitutionDashboard name={profile.name ?? ""} tagCount={tags?.length ?? 0} />;
+		return (
+			<InstitutionDashboard
+				name={profile.name ?? ""}
+				tagCount={tags?.length ?? 0}
+				program={program}
+			/>
+		);
 	}
 
 	const numSort = (a: { name: string }, b: { name: string }) =>
 		a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" });
 
 	// Panel groups (from panel_assignments)
-	let panelGroupsQuery = supabase.from("groups").select(`*, students(id, name, roll_number)`);
+	let panelGroupsQuery = supabase
+		.from("groups")
+		.select(`*, students(id, name, roll_number)`)
+		.eq("program", program);
 	if (!isAdmin && tagId) panelGroupsQuery = panelGroupsQuery.eq("tag_id", tagId);
 	if (!isAdmin) {
 		// faculty: only groups they're assigned to
@@ -393,6 +413,7 @@ export default async function DashboardPage() {
 	const { data: guideGroupsRaw } = await supabase
 		.from("groups")
 		.select(`*, students(id, name, roll_number)`)
+		.eq("program", program)
 		.or(`guide1_id.eq.${user!.id},guide2_id.eq.${user!.id}`);
 	const guideGroups = (guideGroupsRaw ?? []).sort(numSort);
 	const isGuide = guideGroups.length > 0;

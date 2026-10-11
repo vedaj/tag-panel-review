@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
+import { useProgram } from "@/components/ProgramContext";
 import type { Review, TagReview, ReviewUnlockRequest } from "@/types/database";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ type UnlockRequestRow = ReviewUnlockRequest & { review: Review };
 
 export default function TagReviewsPage() {
 	const supabase = createClient();
+	const program = useProgram();
 	const [tagId, setTagId] = useState<string | null>(null);
 	const [tagReviews, setTagReviews] = useState<TagReviewWithReview[]>([]);
 	const [unlockRequests, setUnlockRequests] = useState<UnlockRequestRow[]>([]);
@@ -23,7 +25,7 @@ export default function TagReviewsPage() {
 
 	useEffect(() => {
 		loadData();
-	}, []); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [program]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	async function loadData() {
 		setLoading(true);
@@ -46,13 +48,15 @@ export default function TagReviewsPage() {
 		const [{ data: tr }, { data: ur }] = await Promise.all([
 			supabase
 				.from("tag_reviews")
-				.select("*, review:review_id(*)")
+				.select("*, review:review_id!inner(*)")
 				.eq("tag_id", tid)
+				.eq("review.program", program)
 				.order("created_at"),
 			supabase
 				.from("review_unlock_requests")
-				.select("*, review:review_id(*)")
+				.select("*, review:review_id!inner(*)")
 				.eq("tag_id", tid)
+				.eq("review.program", program)
 				.order("created_at", { ascending: false }),
 		]);
 

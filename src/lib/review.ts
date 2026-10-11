@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { TagReview } from "@/types/database";
+import type { Program, TagReview } from "@/types/database";
 
 export interface ActiveReviewInfo {
 	reviewId: string;
@@ -11,30 +11,37 @@ export interface ActiveReviewInfo {
 }
 
 /**
- * Returns all active (and optionally upcoming) tag_reviews for a given TAG.
+ * Returns all active (and optionally upcoming) tag_reviews for a given TAG and program.
  * Used by server pages to determine what review is currently in play.
  */
-export async function getTagReviews(supabase: SupabaseClient, tagId: string): Promise<TagReview[]> {
+export async function getTagReviews(
+	supabase: SupabaseClient,
+	tagId: string,
+	program: Program,
+): Promise<TagReview[]> {
 	const { data } = await supabase
 		.from("tag_reviews")
-		.select("*, review:review_id(id, name, order_index, created_at)")
+		.select("*, review:review_id!inner(id, name, order_index, created_at, program)")
 		.eq("tag_id", tagId)
+		.eq("review.program", program)
 		.order("created_at");
 	return (data ?? []) as TagReview[];
 }
 
 /**
- * Returns the single active review for a TAG, or null if none.
+ * Returns the single active review for a TAG in a program, or null if none.
  * If multiple are active (edge case: unlock of older review), returns the latest by order_index.
  */
 export async function getActiveTagReview(
 	supabase: SupabaseClient,
 	tagId: string,
+	program: Program,
 ): Promise<ActiveReviewInfo | null> {
 	const { data } = await supabase
 		.from("tag_reviews")
-		.select("*, review:review_id(id, name, order_index)")
+		.select("*, review:review_id!inner(id, name, order_index, program)")
 		.eq("tag_id", tagId)
+		.eq("review.program", program)
 		.eq("status", "active")
 		.order("created_at", { ascending: false })
 		.limit(1)
