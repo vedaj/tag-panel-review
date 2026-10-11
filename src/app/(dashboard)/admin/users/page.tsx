@@ -41,6 +41,14 @@ async function createUser(formData: FormData) {
 	const role = (formData.get("role") as Role) ?? "faculty";
 	const tagId = (formData.get("tag_id") as string) || profile.tag_id;
 
+	// TAG admins may only add faculty or TAG admins to their own TAG
+	if (
+		profile.role !== "institution_admin" &&
+		(!["faculty", "admin"].includes(role) || tagId !== profile.tag_id)
+	) {
+		throw new Error("Forbidden");
+	}
+
 	const admin = createAdminSupabaseClient();
 	const { data, error } = await admin.auth.admin.createUser({
 		email,
@@ -71,8 +79,14 @@ async function updateRole(formData: FormData) {
 	const userId = formData.get("userId") as string;
 	const role = formData.get("role") as Role;
 
-	const admin = createAdminSupabaseClient();
-	await admin.from("profiles").update({ role }).eq("id", userId);
+	// Uses the caller's session so the database enforces who may grant which role
+	const { data, error } = await supabase
+		.from("profiles")
+		.update({ role })
+		.eq("id", userId)
+		.select("id");
+	if (error) throw new Error(error.message);
+	if (!data?.length) throw new Error("Forbidden");
 }
 
 async function moveToTag(formData: FormData) {

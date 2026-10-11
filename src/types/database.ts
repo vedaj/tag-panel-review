@@ -1,6 +1,18 @@
 export type Role = "admin" | "faculty" | "institution_admin";
 export type ReviewStatus = "upcoming" | "active" | "locked";
 export type UnlockRequestStatus = "pending" | "approved" | "rejected";
+export type Program = "btech" | "mtech";
+export type AdminRole = "institution_admin" | "program_admin" | "tag_admin";
+
+export interface UserRole {
+	id: string;
+	user_id: string;
+	role: AdminRole;
+	program: Program | null;
+	tag_id: string | null;
+	granted_by: string | null;
+	granted_at: string;
+}
 
 export interface Tag {
 	id: string;
@@ -25,6 +37,7 @@ export type GuideApprovalStatus = "pending" | "approved";
 export interface Review {
 	id: string;
 	name: string;
+	program: Program;
 	order_index: number;
 	created_by: string | null;
 	created_at: string;
@@ -81,6 +94,7 @@ export interface Group {
 	guide_approved_at: string | null;
 	guide_approved_by: string | null;
 	project_type: ProjectType;
+	program: Program;
 	tag_id?: string | null;
 	created_at: string;
 	students?: Student[];

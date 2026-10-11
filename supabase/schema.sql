@@ -202,23 +202,17 @@ CREATE POLICY "feedback_own"        ON feedback FOR ALL    USING (faculty_id = a
 CREATE POLICY "feedback_admin_read" ON feedback FOR SELECT USING (is_admin());
 
 -- ============================================================
--- GUIDE REVIEW RLS (lives in migrations, not here)
--- The guide-review tables, columns and policies are defined in
--- supabase/migrations/*_001_guide_review.sql through *_004_panel_project_type.sql.
--- The policy-reset loop above drops their policies too, so re-apply
--- 001–004 in order after running this file (or run every migration instead).
--- Final state after 004:
---   group_review_status
---     grs_read   SELECT  any authenticated user
---     grs_write  ALL     can_manage_group_review(group_id): the group's guide,
---                        an admin whose tag_id matches the group's, or an
---                        institution_admin
---   groups
---     groups_guide_approve  UPDATE  guide1_id/guide2_id = auth.uid()
---     groups_panel_update   UPDATE  caller is in panel_assignments for the group
---     trigger groups_guide_column_guard (BEFORE UPDATE): non-admin callers may
---       change only guide_approval_status / guide_approved_at /
---       guide_approved_by (if guide) and project_type (if panel member).
---       A guide who is also on the panel gets both. Admins, institution_admins
---       and service-role calls (no JWT user) are not restricted.
+-- LATER CHANGES LIVE IN MIGRATIONS, NOT HERE
+-- This file is the original base schema. Everything since (guide review,
+-- multiple reviews, B.Tech/M.Tech programs, user_roles, per-program RLS) is in
+-- supabase/migrations/. The policy-reset loop above drops the migrations'
+-- policies too, so for a new database run every migration in order instead of
+-- this file.
+--
+-- Roles after migration 007: admin roles live in user_roles
+--   institution_admin                  global
+--   program_admin  + program           B.Tech Admin / M.Tech Admin
+--   tag_admin      + program + tag_id  tag_id = the member's home TAG
+-- and are changed through grant_role() / revoke_role(). profiles.role is kept
+-- in sync for the existing app (institution_admin, or 'admin' = B.Tech TAG admin).
 -- ============================================================
