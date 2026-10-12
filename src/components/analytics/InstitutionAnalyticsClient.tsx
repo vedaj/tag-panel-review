@@ -11,8 +11,8 @@ import {
 	CartesianGrid,
 	Legend,
 } from "recharts";
-import { useProgram } from "@/components/ProgramContext";
-import { programTerms } from "@/lib/programs";
+import { programLabel, programTerms } from "@/lib/programs";
+import type { Program } from "@/types/database";
 
 export interface TagAnalyticsData {
 	id: string;
@@ -28,7 +28,9 @@ export interface TagAnalyticsData {
 }
 
 interface Props {
-	tags: TagAnalyticsData[];
+	roleLabel: string;
+	/** One per program; institution admins get B.Tech and M.Tech side by side */
+	sections: { program: Program; tags: TagAnalyticsData[] }[];
 }
 
 function pctColor(pct: number) {
@@ -71,23 +73,42 @@ function CustomTooltip({ active, payload, label }: TooltipProps) {
 	);
 }
 
-export default function InstitutionAnalyticsClient({ tags }: Props) {
-	const terms = programTerms(useProgram());
+export default function InstitutionAnalyticsClient({ roleLabel, sections }: Props) {
+	const tagCount = sections[0]?.tags.length ?? 0;
+	return (
+		<div style={{ padding: "0 0 48px" }}>
+			<div className="dashboard-topbar">
+				<p className="eyebrow">{roleLabel}</p>
+				<h1 className="section-title" style={{ marginTop: 6 }}>
+					Cross-TAG Analytics
+				</h1>
+				<p className="section-subtitle">
+					Performance and grading progress across all {tagCount} Technology Advancement Groups
+					{sections.length > 1 ? " · B.Tech and M.Tech" : ` · ${programLabel(sections[0].program)}`}
+				</p>
+			</div>
+			<div className={sections.length > 1 ? "program-columns" : undefined}>
+				{sections.map((sec) => (
+					<ProgramAnalytics key={sec.program} program={sec.program} tags={sec.tags} />
+				))}
+			</div>
+		</div>
+	);
+}
+
+/** One program's cross-TAG analytics. */
+function ProgramAnalytics({ program, tags }: { program: Program; tags: TagAnalyticsData[] }) {
+	const terms = programTerms(program);
 	const totalStudents = tags.reduce((s, t) => s + t.students, 0);
 	const totalGraded = tags.reduce((s, t) => s + t.graded, 0);
 	const institutionPct = totalStudents > 0 ? Math.round((totalGraded / totalStudents) * 100) : 0;
 
 	return (
-		<div style={{ padding: "0 0 48px" }}>
-			<div className="dashboard-topbar">
-				<p className="eyebrow">Institution Admin</p>
-				<h1 className="section-title" style={{ marginTop: 6 }}>
-					Cross-TAG Analytics
-				</h1>
+		<div>
+			<div className="dashboard-section" style={{ marginTop: 16 }}>
+				<p className="eyebrow">{programLabel(program)}</p>
 				<p className="section-subtitle">
-					Performance and grading progress across all {tags.length} Technology Advancement Groups
-					&nbsp;·&nbsp; Institution-wide completion: <strong>{institutionPct}%</strong>
-					&nbsp;({totalGraded}/{totalStudents} students)
+					Completion: <strong>{institutionPct}%</strong> ({totalGraded}/{totalStudents} students)
 				</p>
 			</div>
 

@@ -2,7 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { createAdminSupabaseClient } from "@/lib/supabase-admin";
 import { redirect } from "next/navigation";
 import { getAccess } from "@/lib/access";
-import { groupDisplayName, programTerms } from "@/lib/programs";
+import { groupDisplayName, programLabel, programTerms } from "@/lib/programs";
 import type { Program } from "@/types/database";
 import Link from "next/link";
 import {
@@ -116,14 +116,169 @@ function GroupCard({
 	);
 }
 
+type TagStat = {
+	id: string;
+	name: string;
+	short_name: string;
+	faculty: number;
+	admins: number;
+	groups: number;
+	students: number;
+	graded: number;
+	pct: number;
+};
+
+function TagStatCard({ tag, unitsLabel }: { tag: TagStat; unitsLabel: string }) {
+	return (
+		<div
+			style={{
+				background: "hsl(var(--card))",
+				border: "1px solid hsl(var(--border))",
+				borderRadius: "calc(var(--radius) * 1.5)",
+				padding: "20px 24px",
+				boxShadow: "var(--shadow-md)",
+			}}
+		>
+			<div
+				style={{
+					display: "flex",
+					alignItems: "flex-start",
+					justifyContent: "space-between",
+					marginBottom: 14,
+				}}
+			>
+				<div>
+					<span
+						style={{
+							display: "inline-block",
+							padding: "3px 10px",
+							borderRadius: 999,
+							fontSize: "0.7rem",
+							fontWeight: 800,
+							letterSpacing: "0.05em",
+							background: "hsl(var(--primary) / 0.1)",
+							color: "hsl(var(--primary))",
+							border: "1px solid hsl(var(--primary) / 0.2)",
+							marginBottom: 8,
+						}}
+					>
+						{tag.short_name}
+					</span>
+					<p
+						style={{
+							margin: 0,
+							fontSize: "0.88rem",
+							fontWeight: 600,
+							color: "var(--app-hero-text)",
+							lineHeight: 1.35,
+						}}
+					>
+						{tag.name}
+					</p>
+				</div>
+				<span
+					style={{
+						fontSize: "1.15rem",
+						fontWeight: 800,
+						lineHeight: 1,
+						color:
+							tag.pct >= 75
+								? "#16a34a"
+								: tag.pct >= 40
+									? "#ca8a04"
+									: "hsl(var(--muted-foreground))",
+					}}
+				>
+					{tag.pct}%
+				</span>
+			</div>
+			<div
+				style={{
+					display: "grid",
+					gridTemplateColumns: "repeat(3, 1fr)",
+					gap: 10,
+					marginBottom: 14,
+				}}
+			>
+				{[
+					{ label: "Faculty", value: tag.faculty + tag.admins },
+					{ label: unitsLabel, value: tag.groups },
+					{ label: "Students", value: tag.students },
+				].map(({ label, value }) => (
+					<div key={label} style={{ textAlign: "center" }}>
+						<div
+							style={{
+								fontSize: "1.3rem",
+								fontWeight: 800,
+								color: "var(--app-hero-text)",
+								lineHeight: 1,
+							}}
+						>
+							{value}
+						</div>
+						<div
+							style={{
+								fontSize: "0.68rem",
+								color: "hsl(var(--muted-foreground))",
+								marginTop: 3,
+							}}
+						>
+							{label}
+						</div>
+					</div>
+				))}
+			</div>
+			<div>
+				<div
+					style={{
+						display: "flex",
+						justifyContent: "space-between",
+						fontSize: "0.7rem",
+						color: "hsl(var(--muted-foreground))",
+						marginBottom: 5,
+					}}
+				>
+					<span>Grading progress</span>
+					<span>
+						{tag.graded}/{tag.students} students
+					</span>
+				</div>
+				<div
+					style={{
+						height: 6,
+						background: "hsl(var(--border))",
+						borderRadius: 99,
+						overflow: "hidden",
+					}}
+				>
+					<div
+						style={{
+							height: "100%",
+							width: `${tag.pct}%`,
+							borderRadius: 99,
+							background: tag.pct >= 75 ? "#16a34a" : tag.pct >= 40 ? "#ca8a04" : "#dc2626",
+						}}
+					/>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+/**
+ * Overview across every TAG. Institution admins get one column per program
+ * (B.Tech and M.Tech side by side); program admins get their program only.
+ */
 async function InstitutionDashboard({
 	name,
 	tagCount,
-	program,
+	programs,
+	roleLabel,
 }: {
 	name: string;
 	tagCount: number;
-	program: Program;
+	programs: Program[];
+	roleLabel: string;
 }) {
 	const admin = createAdminSupabaseClient();
 	const [
@@ -135,233 +290,128 @@ async function InstitutionDashboard({
 	] = await Promise.all([
 		admin.from("tags").select("*").order("short_name"),
 		admin.from("profiles").select("id, tag_id"),
-		admin.from("user_roles").select("user_id").eq("role", "tag_admin").eq("program", program),
-		admin.from("groups").select("id, tag_id, students(id)").eq("program", program),
+		admin
+			.from("user_roles")
+			.select("user_id, program")
+			.eq("role", "tag_admin")
+			.in("program", programs),
+		admin.from("groups").select("id, tag_id, program, students(id)").in("program", programs),
 		admin.from("grades").select("student_id").gt("marks", 0),
 	]);
 
 	const gradedSet = new Set((grades ?? []).map((g: { student_id: string }) => g.student_id));
-	const tagAdminIds = new Set((tagAdmins ?? []).map((r: { user_id: string }) => r.user_id));
+	const facultyTotal = (profiles ?? []).filter((p: { tag_id: string | null }) => p.tag_id).length;
 
-	const tagStats = (tags ?? []).map((tag) => {
-		const tagProfiles = (profiles ?? []).filter(
-			(p: { tag_id: string | null }) => p.tag_id === tag.id,
+	const statsFor = (program: Program) => {
+		const tagAdminIds = new Set(
+			(tagAdmins ?? [])
+				.filter((r: { program: string }) => r.program === program)
+				.map((r: { user_id: string }) => r.user_id),
 		);
-		const tagGroups = (groups ?? []).filter((g: { tag_id: string | null }) => g.tag_id === tag.id);
-		const allStudents = tagGroups.flatMap((g) => (g.students ?? []) as { id: string }[]);
-		const students = allStudents.length;
-		const graded = allStudents.filter((s) => gradedSet.has(s.id)).length;
-		const pct = students > 0 ? Math.round((graded / students) * 100) : 0;
-		return {
-			id: tag.id,
-			name: tag.name,
-			short_name: tag.short_name,
-			faculty: (tagProfiles as { id: string }[]).filter((p) => !tagAdminIds.has(p.id)).length,
-			admins: (tagProfiles as { id: string }[]).filter((p) => tagAdminIds.has(p.id)).length,
-			groups: tagGroups.length,
-			students,
-			graded,
-			pct,
-		};
-	});
-
-	const totals = tagStats.reduce(
-		(acc, t) => ({
-			faculty: acc.faculty + t.faculty + t.admins,
-			groups: acc.groups + t.groups,
-			students: acc.students + t.students,
-			graded: acc.graded + t.graded,
-		}),
-		{ faculty: 0, groups: 0, students: 0, graded: 0 },
-	);
-	const institutionPct =
-		totals.students > 0 ? Math.round((totals.graded / totals.students) * 100) : 0;
+		const programGroups = (groups ?? []).filter((g: { program: string }) => g.program === program);
+		const tagStats: TagStat[] = (tags ?? []).map((tag) => {
+			const tagProfiles = (profiles ?? []).filter(
+				(p: { tag_id: string | null }) => p.tag_id === tag.id,
+			) as { id: string }[];
+			const tagGroups = programGroups.filter((g: { tag_id: string | null }) => g.tag_id === tag.id);
+			const allStudents = tagGroups.flatMap((g) => (g.students ?? []) as { id: string }[]);
+			const students = allStudents.length;
+			const graded = allStudents.filter((st) => gradedSet.has(st.id)).length;
+			return {
+				id: tag.id,
+				name: tag.name,
+				short_name: tag.short_name,
+				faculty: tagProfiles.filter((p) => !tagAdminIds.has(p.id)).length,
+				admins: tagProfiles.filter((p) => tagAdminIds.has(p.id)).length,
+				groups: tagGroups.length,
+				students,
+				graded,
+				pct: students > 0 ? Math.round((graded / students) * 100) : 0,
+			};
+		});
+		const totals = tagStats.reduce(
+			(acc, t) => ({
+				groups: acc.groups + t.groups,
+				students: acc.students + t.students,
+				graded: acc.graded + t.graded,
+			}),
+			{ groups: 0, students: 0, graded: 0 },
+		);
+		const pct = totals.students > 0 ? Math.round((totals.graded / totals.students) * 100) : 0;
+		return { program, tagStats, totals, pct };
+	};
+	const perProgram = programs.map(statsFor);
 
 	return (
 		<>
 			<div className="dashboard-topbar">
-				<p className="eyebrow">Institution Admin</p>
+				<p className="eyebrow">{roleLabel}</p>
 				<h1 className="section-title" style={{ marginTop: 6 }}>
 					Welcome, {name}
 				</h1>
 				<p className="section-subtitle">
 					Overview across all {tagCount} Technology Advancement Groups
+					{programs.length > 1 ? " · B.Tech and M.Tech" : ` · ${programLabel(programs[0])}`}
 				</p>
 			</div>
 
 			<div className="dashboard-section">
 				<p className="eyebrow">At a glance</p>
 				<div className="stat-grid">
-					{[
-						{ icon: <Building2 size={18} />, value: tagCount, label: "TAGs" },
-						{ icon: <Users size={18} />, value: totals.faculty, label: "Faculty" },
-						{
-							icon: <ClipboardList size={18} />,
-							value: totals.groups,
-							label: programTerms(program).units,
-						},
-						{ icon: <GraduationCap size={18} />, value: totals.students, label: "Students" },
-						{
-							icon: <TrendingUp size={18} />,
-							value: `${institutionPct}%`,
-							label: "Grading Progress",
-						},
-					].map(({ icon, value, label }) => (
-						<div key={label} className="stat-card">
-							<div className="stat-icon">{icon}</div>
-							<span className="stat-value">{value}</span>
-							<span className="stat-label">{label}</span>
+					<div className="stat-card">
+						<div className="stat-icon">
+							<Building2 size={18} />
 						</div>
-					))}
+						<span className="stat-value">{tagCount}</span>
+						<span className="stat-label">TAGs</span>
+					</div>
+					<div className="stat-card">
+						<div className="stat-icon">
+							<Users size={18} />
+						</div>
+						<span className="stat-value">{facultyTotal}</span>
+						<span className="stat-label">Faculty</span>
+					</div>
 				</div>
 			</div>
 
-			<div className="dashboard-section">
-				<p className="eyebrow">TAG breakdown</p>
-				<div
-					style={{
-						display: "grid",
-						gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-						gap: 16,
-						marginTop: 12,
-					}}
-				>
-					{tagStats.map((tag) => (
-						<div
-							key={tag.id}
-							style={{
-								background: "hsl(var(--card))",
-								border: "1px solid hsl(var(--border))",
-								borderRadius: "calc(var(--radius) * 1.5)",
-								padding: "20px 24px",
-								boxShadow: "var(--shadow-md)",
-							}}
-						>
-							<div
-								style={{
-									display: "flex",
-									alignItems: "flex-start",
-									justifyContent: "space-between",
-									marginBottom: 14,
-								}}
-							>
-								<div>
-									<span
-										style={{
-											display: "inline-block",
-											padding: "3px 10px",
-											borderRadius: 999,
-											fontSize: "0.7rem",
-											fontWeight: 800,
-											letterSpacing: "0.05em",
-											background: "hsl(var(--primary) / 0.1)",
-											color: "hsl(var(--primary))",
-											border: "1px solid hsl(var(--primary) / 0.2)",
-											marginBottom: 8,
-										}}
-									>
-										{tag.short_name}
-									</span>
-									<p
-										style={{
-											margin: 0,
-											fontSize: "0.88rem",
-											fontWeight: 600,
-											color: "var(--app-hero-text)",
-											lineHeight: 1.35,
-										}}
-									>
-										{tag.name}
-									</p>
-								</div>
-								<span
-									style={{
-										fontSize: "1.15rem",
-										fontWeight: 800,
-										lineHeight: 1,
-										color:
-											tag.pct >= 75
-												? "#16a34a"
-												: tag.pct >= 40
-													? "#ca8a04"
-													: "hsl(var(--muted-foreground))",
-									}}
-								>
-									{tag.pct}%
-								</span>
-							</div>
-							<div
-								style={{
-									display: "grid",
-									gridTemplateColumns: "repeat(3, 1fr)",
-									gap: 10,
-									marginBottom: 14,
-								}}
-							>
+			<div className={programs.length > 1 ? "program-columns" : undefined}>
+				{perProgram.map(({ program, tagStats, totals, pct }) => {
+					const units = programTerms(program).units;
+					return (
+						<div key={program} className="dashboard-section">
+							<p className="eyebrow">{programLabel(program)}</p>
+							<div className="stat-grid">
 								{[
-									{ label: "Faculty", value: tag.faculty + tag.admins },
-									{ label: programTerms(program).units, value: tag.groups },
-									{ label: "Students", value: tag.students },
-								].map(({ label, value }) => (
-									<div key={label} style={{ textAlign: "center" }}>
-										<div
-											style={{
-												fontSize: "1.3rem",
-												fontWeight: 800,
-												color: "var(--app-hero-text)",
-												lineHeight: 1,
-											}}
-										>
-											{value}
-										</div>
-										<div
-											style={{
-												fontSize: "0.68rem",
-												color: "hsl(var(--muted-foreground))",
-												marginTop: 3,
-											}}
-										>
-											{label}
-										</div>
+									{ icon: <ClipboardList size={18} />, value: totals.groups, label: units },
+									{ icon: <GraduationCap size={18} />, value: totals.students, label: "Students" },
+									{ icon: <TrendingUp size={18} />, value: `${pct}%`, label: "Grading Progress" },
+								].map(({ icon, value, label }) => (
+									<div key={label} className="stat-card">
+										<div className="stat-icon">{icon}</div>
+										<span className="stat-value">{value}</span>
+										<span className="stat-label">{label}</span>
 									</div>
 								))}
 							</div>
-							<div>
-								<div
-									style={{
-										display: "flex",
-										justifyContent: "space-between",
-										fontSize: "0.7rem",
-										color: "hsl(var(--muted-foreground))",
-										marginBottom: 5,
-									}}
-								>
-									<span>Grading progress</span>
-									<span>
-										{tag.graded}/{tag.students} students
-									</span>
-								</div>
-								<div
-									style={{
-										height: 6,
-										background: "hsl(var(--border))",
-										borderRadius: 99,
-										overflow: "hidden",
-									}}
-								>
-									<div
-										style={{
-											height: "100%",
-											width: `${tag.pct}%`,
-											borderRadius: 99,
-											background: tag.pct >= 75 ? "#16a34a" : tag.pct >= 40 ? "#ca8a04" : "#dc2626",
-										}}
-									/>
-								</div>
+							<p className="eyebrow" style={{ marginTop: 20 }}>
+								TAG breakdown
+							</p>
+							<div
+								style={{
+									display: "grid",
+									gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
+									gap: 16,
+									marginTop: 12,
+								}}
+							>
+								{tagStats.map((tag) => (
+									<TagStatCard key={tag.id} tag={tag} unitsLabel={units} />
+								))}
 							</div>
 						</div>
-					))}
-				</div>
+					);
+				})}
 			</div>
 		</>
 	);
@@ -391,7 +441,8 @@ export default async function DashboardPage() {
 			<InstitutionDashboard
 				name={profile?.name ?? ""}
 				tagCount={tags?.length ?? 0}
-				program={program}
+				programs={access.isInstitutionAdmin ? ["btech", "mtech"] : [program]}
+				roleLabel={access.roleLabel}
 			/>
 		);
 	}
