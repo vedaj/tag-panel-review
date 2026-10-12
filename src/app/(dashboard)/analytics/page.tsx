@@ -3,6 +3,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase-admin";
 import { getAccess } from "@/lib/access";
 import { getActiveTagReview } from "@/lib/review";
 import { redirect } from "next/navigation";
+import type { Program } from "@/types/database";
 import AnalyticsClient from "@/components/analytics/AnalyticsClient";
 import InstitutionAnalyticsClient, {
 	type TagAnalyticsData,
@@ -34,73 +35,78 @@ export default async function AnalyticsPage({
 	if (access.isInstitutionAdmin || access.isProgramAdmin) {
 		if (!tagId) {
 			const admin = createAdminSupabaseClient();
-			const [{ data: tags }, { data: profiles }, { data: groups }, { data: grades }] =
+			// Institution admins see B.Tech and M.Tech side by side
+			const programs: Program[] = access.isInstitutionAdmin ? ["btech", "mtech"] : [program];
+			const [{ data: tags }, { data: profiles }, { data: allGroups }, { data: grades }] =
 				await Promise.all([
 					admin.from("tags").select("*").order("short_name"),
 					admin.from("profiles").select("id, tag_id"),
-					admin.from("groups").select("id, tag_id, students(id)").eq("program", program),
+					admin.from("groups").select("id, tag_id, program, students(id)").in("program", programs),
 					admin.from("grades").select("student_id, faculty_id").gt("marks", 0),
 				]);
 
 			const gradedStudentSet = new Set(
 				(grades ?? []).map((g: { student_id: string }) => g.student_id),
 			);
-			const gradingFacultyByTag: Record<string, Set<string>> = {};
-
-			const studentTagMap = new Map<string, string>();
-			for (const group of groups ?? []) {
-				if (!group.tag_id) continue;
-				for (const student of (group.students ?? []) as { id: string }[]) {
-					studentTagMap.set(student.id, group.tag_id);
-				}
-			}
-
 			const facultyTagMap = new Map<string, string>();
 			for (const p of profiles ?? []) {
 				if (p.tag_id) facultyTagMap.set(p.id, p.tag_id);
 			}
 
-			for (const tag of tags ?? []) {
-				gradingFacultyByTag[tag.id] = new Set();
-			}
-			for (const grade of grades ?? []) {
-				// Only count grading of this program's students
-				if (!studentTagMap.has(grade.student_id)) continue;
-				const tagId2 = facultyTagMap.get(grade.faculty_id);
-				if (tagId2 && gradingFacultyByTag[tagId2]) {
-					gradingFacultyByTag[tagId2].add(grade.faculty_id);
+			const tagDataFor = (prog: Program): TagAnalyticsData[] => {
+				const groups = (allGroups ?? []).filter((g: { program: string }) => g.program === prog);
+				const studentTagMap = new Map<string, string>();
+				for (const group of groups) {
+					if (!group.tag_id) continue;
+					for (const student of (group.students ?? []) as { id: string }[]) {
+						studentTagMap.set(student.id, group.tag_id);
+					}
 				}
-			}
+				const gradingFacultyByTag: Record<string, Set<string>> = {};
+				for (const tag of tags ?? []) {
+					gradingFacultyByTag[tag.id] = new Set();
+				}
+				for (const grade of grades ?? []) {
+					// Only count grading of this program's students
+					if (!studentTagMap.has(grade.student_id)) continue;
+					const tagId2 = facultyTagMap.get(grade.faculty_id);
+					if (tagId2 && gradingFacultyByTag[tagId2]) {
+						gradingFacultyByTag[tagId2].add(grade.faculty_id);
+					}
+				}
+				return (tags ?? []).map((tag) => {
+					const tagProfiles = (profiles ?? []).filter(
+						(p: { tag_id: string | null }) => p.tag_id === tag.id,
+					);
+					const tagGroups = groups.filter((g: { tag_id: string | null }) => g.tag_id === tag.id);
+					const allStudents = tagGroups.flatMap((g) => (g.students ?? []) as { id: string }[]);
+					const studentCount = allStudents.length;
+					const gradedCount = allStudents.filter((s) => gradedStudentSet.has(s.id)).length;
+					// Every member is faculty, admins included
+					const facultyCount = tagProfiles.length;
+					const facultyGrading = gradingFacultyByTag[tag.id]?.size ?? 0;
+					const pct = studentCount > 0 ? Math.round((gradedCount / studentCount) * 100) : 0;
+					return {
+						id: tag.id,
+						short_name: tag.short_name,
+						name: tag.name,
+						pct,
+						students: studentCount,
+						graded: gradedCount,
+						groups: tagGroups.length,
+						faculty: facultyCount,
+						faculty_grading: facultyGrading,
+						faculty_pct: facultyCount > 0 ? Math.round((facultyGrading / facultyCount) * 100) : 0,
+					};
+				});
+			};
 
-			const tagData: TagAnalyticsData[] = (tags ?? []).map((tag) => {
-				const tagProfiles = (profiles ?? []).filter(
-					(p: { tag_id: string | null }) => p.tag_id === tag.id,
-				);
-				const tagGroups = (groups ?? []).filter(
-					(g: { tag_id: string | null }) => g.tag_id === tag.id,
-				);
-				const allStudents = tagGroups.flatMap((g) => (g.students ?? []) as { id: string }[]);
-				const studentCount = allStudents.length;
-				const gradedCount = allStudents.filter((s) => gradedStudentSet.has(s.id)).length;
-				// Every member is faculty, admins included
-				const facultyCount = tagProfiles.length;
-				const facultyGrading = gradingFacultyByTag[tag.id]?.size ?? 0;
-				const pct = studentCount > 0 ? Math.round((gradedCount / studentCount) * 100) : 0;
-				return {
-					id: tag.id,
-					short_name: tag.short_name,
-					name: tag.name,
-					pct,
-					students: studentCount,
-					graded: gradedCount,
-					groups: tagGroups.length,
-					faculty: facultyCount,
-					faculty_grading: facultyGrading,
-					faculty_pct: facultyCount > 0 ? Math.round((facultyGrading / facultyCount) * 100) : 0,
-				};
-			});
-
-			return <InstitutionAnalyticsClient tags={tagData} />;
+			return (
+				<InstitutionAnalyticsClient
+					roleLabel={access.roleLabel}
+					sections={programs.map((prog) => ({ program: prog, tags: tagDataFor(prog) }))}
+				/>
+			);
 		}
 	}
 
