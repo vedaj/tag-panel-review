@@ -7,7 +7,7 @@ import { getAccess } from "@/lib/access";
 import { canManageUser, type RoleRow } from "@/lib/roles";
 import { isProgram } from "@/lib/programs";
 import { UsersClient } from "@/components/admin/UsersClient";
-import type { AdminRole } from "@/types/database";
+import type { AdminRole, Program } from "@/types/database";
 
 export type UserRow = {
 	id: string;
@@ -21,6 +21,20 @@ export type UserRow = {
 };
 
 export type TagOption = { id: string; short_name: string; name: string };
+
+/** A group/project someone guides or sits on the panel of. */
+export type AssignmentSummary = {
+	group_id: string;
+	name: string;
+	program: Program;
+	tag_id: string | null;
+	project_title: string;
+	guide_approved: boolean;
+	students: number;
+};
+
+/** Per user: what they guide and which panels they sit on, by program. */
+export type UserContext = { guide: AssignmentSummary[]; panel: AssignmentSummary[] };
 
 /** The caller's access; throws unless they are an admin in the active program. */
 async function requireAdmin() {
@@ -154,11 +168,56 @@ export default async function UsersPage() {
 
 	let profilesQuery = admin.from("profiles").select("*, tag:tags(short_name, name)");
 	if (tagFilter) profilesQuery = profilesQuery.eq("tag_id", tagFilter);
-	const [{ data: profiles }, { data: allRoles }, { data: allTags }] = await Promise.all([
+	// Institution admins see both programs; everyone else only the active one
+	const programs: Program[] = access.isInstitutionAdmin ? ["btech", "mtech"] : [access.program];
+	const groupFields =
+		"id, name, program, tag_id, project_title, guide_approval_status, guide1_id, guide2_id, students(name)";
+	const [
+		{ data: profiles },
+		{ data: allRoles },
+		{ data: allTags },
+		{ data: groups },
+		{ data: panels },
+	] = await Promise.all([
 		profilesQuery,
 		admin.from("user_roles").select("user_id, role, program, tag_id"),
 		admin.from("tags").select("id, short_name, name").order("short_name"),
+		admin.from("groups").select(groupFields).in("program", programs),
+		admin
+			.from("panel_assignments")
+			.select(`faculty_id, group:groups!inner(${groupFields})`)
+			.in("group.program", programs),
 	]);
+
+	type GroupRow = {
+		id: string;
+		name: string;
+		program: Program;
+		tag_id: string | null;
+		project_title: string | null;
+		guide_approval_status: string;
+		guide1_id: string | null;
+		guide2_id: string | null;
+		students: { name: string }[] | null;
+	};
+	// An M.Tech project is stored under the roll number; show the student's name
+	const summarize = (g: GroupRow): AssignmentSummary => ({
+		group_id: g.id,
+		name: g.program === "mtech" ? g.students?.[0]?.name || g.name : g.name,
+		program: g.program,
+		tag_id: g.tag_id,
+		project_title: g.project_title ?? "",
+		guide_approved: g.guide_approval_status === "approved",
+		students: g.students?.length ?? 0,
+	});
+	const contexts: Record<string, UserContext> = {};
+	const contextFor = (id: string) => (contexts[id] ??= { guide: [], panel: [] });
+	for (const g of (groups ?? []) as GroupRow[]) {
+		for (const id of [g.guide1_id, g.guide2_id]) if (id) contextFor(id).guide.push(summarize(g));
+	}
+	for (const pa of (panels ?? []) as unknown as { faculty_id: string; group: GroupRow }[]) {
+		contextFor(pa.faculty_id).panel.push(summarize(pa.group));
+	}
 
 	const rolesByUser = new Map<string, RoleRow[]>();
 	for (const r of (allRoles ?? []) as (RoleRow & { user_id: string })[]) {
@@ -207,6 +266,8 @@ export default async function UsersPage() {
 	return (
 		<UsersClient
 			users={users}
+			contexts={contexts}
+			programs={programs}
 			tags={(allTags ?? []) as TagOption[]}
 			createUser={createUser}
 			setRole={setRole}

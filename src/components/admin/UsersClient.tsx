@@ -1,23 +1,33 @@
 "use client";
-import { useState, useTransition, useRef } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-	UserPlus,
-	KeyRound,
-	Trash2,
-	Shield,
-	User,
-	X,
-	Loader2,
-	ChevronDown,
-	Building2,
 	ArrowRightLeft,
-	ShieldCheck,
+	Building2,
+	CheckCircle2,
+	ChevronDown,
+	Clock,
+	ClipboardList,
+	GraduationCap,
+	KeyRound,
+	Loader2,
+	Search,
+	Shield,
+	Trash2,
+	UserPlus,
+	X,
 } from "lucide-react";
-import type { UserRow, TagOption } from "@/app/(dashboard)/admin/users/page";
+import type {
+	AssignmentSummary,
+	TagOption,
+	UserContext,
+	UserRow,
+} from "@/app/(dashboard)/admin/users/page";
+import type { Program } from "@/types/database";
 import { useAccess } from "@/components/AccessContext";
 import {
 	assignableRoles,
@@ -26,7 +36,7 @@ import {
 	roleLabels,
 	type AssignableRole,
 } from "@/lib/roles";
-import { programLabel } from "@/lib/programs";
+import { programLabel, programTerms } from "@/lib/programs";
 
 function formatDate(iso: string | null) {
 	if (!iso) return "—";
@@ -35,6 +45,16 @@ function formatDate(iso: string | null) {
 		month: "short",
 		year: "numeric",
 	});
+}
+
+function initialsOf(name: string, email: string) {
+	const src = name.trim() || email;
+	return src
+		.split(/\s+/)
+		.map((w) => w[0])
+		.slice(0, 2)
+		.join("")
+		.toUpperCase();
 }
 
 function Modal({
@@ -47,67 +67,12 @@ function Modal({
 	children: React.ReactNode;
 }) {
 	return (
-		<div
-			style={{
-				position: "fixed",
-				inset: 0,
-				zIndex: 50,
-				display: "flex",
-				alignItems: "center",
-				justifyContent: "center",
-				padding: 16,
-			}}
-		>
-			<div
-				style={{
-					position: "absolute",
-					inset: 0,
-					background: "rgba(0,0,0,0.35)",
-					backdropFilter: "blur(2px)",
-				}}
-				onClick={onClose}
-			/>
-			<div
-				style={{
-					position: "relative",
-					zIndex: 1,
-					background: "hsl(var(--card))",
-					border: "1px solid hsl(var(--border))",
-					borderRadius: "calc(var(--radius) * 2)",
-					padding: 28,
-					width: "100%",
-					maxWidth: 440,
-					boxShadow: "0 20px 60px -12px rgba(0,0,0,0.25)",
-				}}
-			>
-				<div
-					style={{
-						display: "flex",
-						alignItems: "center",
-						justifyContent: "space-between",
-						marginBottom: 20,
-					}}
-				>
-					<h2
-						style={{
-							margin: 0,
-							fontSize: "1.1rem",
-							fontWeight: 700,
-							color: "var(--app-hero-text)",
-						}}
-					>
-						{title}
-					</h2>
-					<button
-						onClick={onClose}
-						style={{
-							background: "none",
-							border: "none",
-							cursor: "pointer",
-							color: "hsl(var(--muted-foreground))",
-							padding: 4,
-						}}
-					>
+		<div className="users-modal">
+			<div className="users-modal-backdrop" onClick={onClose} />
+			<div className="users-modal-card">
+				<div className="users-modal-head">
+					<h2>{title}</h2>
+					<button onClick={onClose} aria-label="Close">
 						<X size={18} />
 					</button>
 				</div>
@@ -139,40 +104,19 @@ function SelectField({
 }) {
 	return (
 		<div style={{ position: "relative" }}>
-			<select
-				name={name}
-				defaultValue={defaultValue}
-				style={{
-					width: "100%",
-					padding: "8px 32px 8px 12px",
-					borderRadius: 8,
-					border: "1px solid hsl(var(--border))",
-					background: "hsl(var(--background))",
-					color: "hsl(var(--foreground))",
-					fontSize: "0.88rem",
-					appearance: "none",
-					cursor: "pointer",
-				}}
-			>
+			<select name={name} defaultValue={defaultValue} className="users-select">
 				{children}
 			</select>
-			<ChevronDown
-				size={14}
-				style={{
-					position: "absolute",
-					right: 10,
-					top: "50%",
-					transform: "translateY(-50%)",
-					pointerEvents: "none",
-					color: "hsl(var(--muted-foreground))",
-				}}
-			/>
+			<ChevronDown size={14} className="users-select-chevron" />
 		</div>
 	);
 }
 
 interface Props {
 	users: UserRow[];
+	contexts: Record<string, UserContext>;
+	/** Programs shown side by side: both for institution admins, else the active one */
+	programs: Program[];
 	tags: TagOption[];
 	createUser: (fd: FormData) => Promise<void>;
 	setRole: (fd: FormData) => Promise<void>;
@@ -183,6 +127,8 @@ interface Props {
 
 export function UsersClient({
 	users,
+	contexts,
+	programs,
 	tags,
 	createUser,
 	setRole,
@@ -191,35 +137,36 @@ export function UsersClient({
 	deleteUser,
 }: Props) {
 	const access = useAccess();
-	const currentUserId = access.userId;
-	const isInstitutionAdmin = access.isInstitutionAdmin;
-	const callerTagId = access.tagId;
 	const router = useRouter();
 	const [isPending, startTransition] = useTransition();
+	const [search, setSearch] = useState("");
+	const [tagFilter, setTagFilter] = useState("");
+	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [showCreate, setShowCreate] = useState(false);
 	const [pwdUser, setPwdUser] = useState<UserRow | null>(null);
 	const [moveUser, setMoveUser] = useState<UserRow | null>(null);
 	const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
-	const [roleUser, setRoleUser] = useState<UserRow | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState<string | null>(null);
 	const createFormRef = useRef<HTMLFormElement>(null);
 	const pwdFormRef = useRef<HTMLFormElement>(null);
 	const moveFormRef = useRef<HTMLFormElement>(null);
 
-	function toggleRole(u: UserRow, r: AssignableRole, grant: boolean) {
-		const fd = new FormData();
-		fd.append("userId", u.id);
-		fd.append("role", r.role);
-		fd.append("program", r.program ?? "");
-		fd.append("grant", String(grant));
-		act(
-			async () => {
-				await setRole(fd);
-			},
-			`${u.name || u.email}: ${r.label} ${grant ? "granted" : "removed"}`,
+	const isInstitutionAdmin = access.isInstitutionAdmin;
+	const canMove = access.isInstitutionAdmin || access.isProgramAdmin;
+	const showTagFilter = access.tagFilter === null;
+	const tagName = (id: string | null) => tags.find((t) => t.id === id)?.short_name ?? null;
+
+	const filtered = useMemo(() => {
+		const q = search.trim().toLowerCase();
+		return users.filter(
+			(u) =>
+				(!q || u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) &&
+				(!tagFilter || (tagFilter === "none" ? !u.tag_id : u.tag_id === tagFilter)),
 		);
-	}
+	}, [users, search, tagFilter]);
+
+	const selected = users.find((u) => u.id === selectedId) ?? null;
 
 	function flash(msg: string, type: "ok" | "err") {
 		if (type === "ok") {
@@ -247,27 +194,34 @@ export function UsersClient({
 		});
 	}
 
-	const showTagColumn = isInstitutionAdmin;
+	function toggleRole(u: UserRow, r: AssignableRole, grant: boolean) {
+		const fd = new FormData();
+		fd.append("userId", u.id);
+		fd.append("role", r.role);
+		fd.append("program", r.program ?? "");
+		fd.append("grant", String(grant));
+		act(
+			async () => {
+				await setRole(fd);
+			},
+			`${u.name || u.email}: ${r.label} ${grant ? "granted" : "removed"}`,
+		);
+	}
 
 	return (
 		<div style={{ padding: "0 0 48px" }}>
-			{/* Top bar */}
-			<div
-				className="dashboard-topbar"
-				style={{
-					display: "flex",
-					alignItems: "flex-end",
-					justifyContent: "space-between",
-					gap: 16,
-				}}
-			>
+			<div className="dashboard-topbar users-topbar">
 				<div>
 					<p className="eyebrow">{access.roleLabel}</p>
 					<h1 className="section-title" style={{ marginTop: 6 }}>
 						Users
 					</h1>
 					<p className="section-subtitle">
-						{users.length} registered account{users.length !== 1 ? "s" : ""}
+						{users.length} {users.length === 1 ? "person" : "people"}
+						{access.tagFilter && tagName(access.tagFilter)
+							? ` in ${tagName(access.tagFilter)}`
+							: ""}
+						{programs.length === 1 ? ` · ${programLabel(programs[0])}` : " · B.Tech & M.Tech"}
 					</p>
 				</div>
 				{isInstitutionAdmin && (
@@ -277,241 +231,105 @@ export function UsersClient({
 				)}
 			</div>
 
-			{/* Feedback banner */}
 			{(error || success) && (
-				<div
-					style={{
-						margin: "0 24px 16px",
-						padding: "12px 16px",
-						borderRadius: 10,
-						fontSize: "0.85rem",
-						fontWeight: 500,
-						background: error ? "#fff5f5" : "#f0fdf4",
-						border: `1px solid ${error ? "#fecaca" : "#bbf7d0"}`,
-						color: error ? "#991b1b" : "#166534",
-					}}
-				>
-					{error ?? success}
-				</div>
+				<div className={`users-banner${error ? " is-error" : ""}`}>{error ?? success}</div>
 			)}
 
-			{/* Table */}
-			<div style={{ margin: "0 24px", overflowX: "auto" }}>
-				<table
-					style={{ width: "100%", borderCollapse: "collapse", minWidth: showTagColumn ? 700 : 600 }}
-				>
-					<thead>
-						<tr
-							style={{
-								background: "hsl(var(--muted))",
-								borderBottom: "2px solid hsl(var(--border))",
-							}}
-						>
-							{[
-								"Name",
-								"Email",
-								...(showTagColumn ? ["TAG"] : []),
-								"Role",
-								"Joined",
-								"Last Sign In",
-								"Actions",
-							].map((h) => (
-								<th
-									key={h}
-									style={{
-										padding: "10px 14px",
-										textAlign: "left",
-										fontSize: "0.72rem",
-										fontWeight: 700,
-										letterSpacing: "0.05em",
-										textTransform: "uppercase",
-										color: "hsl(var(--muted-foreground))",
-										borderRight: "1px solid hsl(var(--border) / 0.4)",
-										whiteSpace: "nowrap",
-									}}
-								>
-									{h}
-								</th>
-							))}
-						</tr>
-					</thead>
-					<tbody>
-						{users.map((u, i) => {
-							const isMe = u.id === currentUserId;
-							const rowBg = i % 2 === 0 ? "hsl(var(--card))" : "hsl(var(--muted) / 0.3)";
+			<div className={`users-layout${selected ? " has-selection" : ""}`}>
+				{/* People */}
+				<div className="users-list-panel">
+					<div className="users-list-tools">
+						<div className="users-search">
+							<Search size={14} />
+							<input
+								value={search}
+								onChange={(e) => setSearch(e.target.value)}
+								placeholder="Search name or email"
+								aria-label="Search people"
+							/>
+						</div>
+						{showTagFilter && (
+							<select
+								className="users-select users-tag-filter"
+								value={tagFilter}
+								onChange={(e) => setTagFilter(e.target.value)}
+								aria-label="Filter by TAG"
+							>
+								<option value="">All TAGs</option>
+								{tags.map((t) => (
+									<option key={t.id} value={t.id}>
+										{t.short_name}
+									</option>
+								))}
+								<option value="none">No TAG</option>
+							</select>
+						)}
+					</div>
+
+					<ul className="users-list">
+						{filtered.map((u) => {
+							const labels = roleLabels(u.roles);
 							return (
-								<tr
-									key={u.id}
-									style={{ background: rowBg, borderBottom: "1px solid hsl(var(--border) / 0.35)" }}
-								>
-									<td
-										style={{
-											padding: "10px 14px",
-											fontSize: "0.88rem",
-											fontWeight: 600,
-											color: "var(--app-hero-text)",
-											whiteSpace: "nowrap",
-										}}
+								<li key={u.id}>
+									<button
+										className={`users-list-row${u.id === selectedId ? " is-selected" : ""}`}
+										onClick={() => setSelectedId(u.id)}
 									>
-										{u.name || "—"}
-										{isMe && (
-											<span
-												style={{
-													marginLeft: 6,
-													fontSize: "0.65rem",
-													color: "hsl(var(--primary))",
-													fontWeight: 700,
-												}}
-											>
-												you
+										<span className="users-avatar">{initialsOf(u.name, u.email)}</span>
+										<span className="users-list-main">
+											<span className="users-list-name">
+												{u.name || u.email}
+												{u.id === access.userId && <span className="users-you">you</span>}
 											</span>
-										)}
-									</td>
-									<td
-										style={{
-											padding: "10px 14px",
-											fontSize: "0.82rem",
-											color: "hsl(var(--muted-foreground))",
-										}}
-									>
-										{u.email}
-									</td>
-									{showTagColumn && (
-										<td style={{ padding: "10px 14px" }}>
-											{u.tag_short_name ? (
-												<span
-													style={{
-														display: "inline-flex",
-														alignItems: "center",
-														gap: 4,
-														padding: "3px 8px",
-														borderRadius: 999,
-														fontSize: "0.7rem",
-														fontWeight: 700,
-														background: "hsl(var(--primary) / 0.08)",
-														color: "hsl(var(--primary))",
-														border: "1px solid hsl(var(--primary) / 0.2)",
-													}}
-												>
-													{u.tag_short_name}
+											<span className="users-list-email">{u.email}</span>
+										</span>
+										<span className="users-list-meta">
+											{u.tag_short_name && <span className="users-chip">{u.tag_short_name}</span>}
+											{labels.length > 0 ? (
+												<span className="users-chip is-role" title={labels.join(", ")}>
+													<Shield size={10} />{" "}
+													{labels.length > 1 ? `${labels.length} roles` : labels[0]}
 												</span>
-											) : (
-												<span
-													style={{ color: "hsl(var(--muted-foreground))", fontSize: "0.78rem" }}
-												>
-													—
-												</span>
-											)}
-										</td>
-									)}
-									<td style={{ padding: "10px 14px" }}>
-										<RolePill
-											user={u}
-											canEdit={
-												!isMe && assignableRoles(access.roles, callerTagId, u.tag_id).length > 0
-											}
-											isPending={isPending}
-											onChangeRole={() => setRoleUser(u)}
-										/>
-									</td>
-									<td
-										style={{
-											padding: "10px 14px",
-											fontSize: "0.78rem",
-											color: "hsl(var(--muted-foreground))",
-											whiteSpace: "nowrap",
-										}}
-									>
-										{formatDate(u.created_at)}
-									</td>
-									<td
-										style={{
-											padding: "10px 14px",
-											fontSize: "0.78rem",
-											color: "hsl(var(--muted-foreground))",
-											whiteSpace: "nowrap",
-										}}
-									>
-										{formatDate(u.last_sign_in_at)}
-									</td>
-									<td style={{ padding: "10px 14px" }}>
-										<div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-											{(isInstitutionAdmin || access.isProgramAdmin) && (
-												<button
-													onClick={() => setMoveUser(u)}
-													title="Move to a different TAG"
-													style={{
-														display: "inline-flex",
-														alignItems: "center",
-														gap: 4,
-														padding: "4px 10px",
-														borderRadius: 999,
-														fontSize: "0.72rem",
-														fontWeight: 600,
-														border: "1px solid hsl(var(--border))",
-														background: "hsl(var(--background))",
-														color: "hsl(var(--foreground))",
-														cursor: "pointer",
-													}}
-												>
-													<ArrowRightLeft size={12} /> TAG
-												</button>
-											)}
-											{canManageUser(access.roles, callerTagId, {
-												roles: u.roles,
-												tagId: u.tag_id,
-											}) && (
-												<button
-													onClick={() => setPwdUser(u)}
-													title="Set password"
-													style={{
-														display: "inline-flex",
-														alignItems: "center",
-														gap: 4,
-														padding: "4px 10px",
-														borderRadius: 999,
-														fontSize: "0.72rem",
-														fontWeight: 600,
-														border: "1px solid hsl(var(--border))",
-														background: "hsl(var(--background))",
-														color: "hsl(var(--foreground))",
-														cursor: "pointer",
-													}}
-												>
-													<KeyRound size={12} /> Password
-												</button>
-											)}
-											{!isMe && isInstitutionAdmin && (
-												<button
-													onClick={() => setDeleteTarget(u)}
-													title="Delete user"
-													style={{
-														display: "inline-flex",
-														alignItems: "center",
-														gap: 4,
-														padding: "4px 10px",
-														borderRadius: 999,
-														fontSize: "0.72rem",
-														fontWeight: 600,
-														border: "1px solid hsl(var(--destructive) / 0.3)",
-														background: "hsl(var(--destructive) / 0.06)",
-														color: "hsl(var(--destructive))",
-														cursor: "pointer",
-													}}
-												>
-													<Trash2 size={12} />
-												</button>
-											)}
-										</div>
-									</td>
-								</tr>
+											) : null}
+										</span>
+									</button>
+								</li>
 							);
 						})}
-					</tbody>
-				</table>
+						{filtered.length === 0 && <li className="users-empty">No one matches.</li>}
+					</ul>
+				</div>
+
+				{/* Profile */}
+				<div className="users-profile-panel">
+					{selected ? (
+						<UserProfile
+							key={selected.id}
+							user={selected}
+							context={contexts[selected.id] ?? { guide: [], panel: [] }}
+							programs={programs}
+							tagName={tagName}
+							isPending={isPending}
+							onClose={() => setSelectedId(null)}
+							onToggleRole={(r, grant) => toggleRole(selected, r, grant)}
+							onPassword={() => setPwdUser(selected)}
+							onMove={canMove ? () => setMoveUser(selected) : undefined}
+							onDelete={
+								isInstitutionAdmin && selected.id !== access.userId
+									? () => setDeleteTarget(selected)
+									: undefined
+							}
+						/>
+					) : (
+						<div className="users-profile-empty">
+							<Shield size={28} />
+							<p>Select someone to see their TAG, roles and assignments.</p>
+						</div>
+					)}
+				</div>
 			</div>
 
-			{/* Create user modal */}
+			{/* Create user */}
 			{showCreate && (
 				<Modal title="New User" onClose={() => setShowCreate(false)}>
 					<form
@@ -539,34 +357,19 @@ export function UsersClient({
 								minLength={8}
 							/>
 						</FormField>
-						<label
-							style={{
-								display: "flex",
-								alignItems: "center",
-								gap: 8,
-								marginBottom: 16,
-								fontSize: "0.85rem",
-								cursor: "pointer",
-							}}
-						>
-							<input
-								type="checkbox"
-								name="tag_admin"
-								style={{ accentColor: "hsl(var(--primary))" }}
-							/>
+						<FormField label="TAG">
+							<SelectField name="tag_id" defaultValue={access.tagId ?? ""}>
+								{tags.map((t) => (
+									<option key={t.id} value={t.id}>
+										{t.short_name} — {t.name}
+									</option>
+								))}
+							</SelectField>
+						</FormField>
+						<label className="users-checkbox">
+							<input type="checkbox" name="tag_admin" />
 							Also make {programLabel(access.program)} TAG admin of this TAG
 						</label>
-						{isInstitutionAdmin && (
-							<FormField label="TAG">
-								<SelectField name="tag_id" defaultValue={callerTagId ?? ""}>
-									{tags.map((t) => (
-										<option key={t.id} value={t.id}>
-											{t.short_name} — {t.name}
-										</option>
-									))}
-								</SelectField>
-							</FormField>
-						)}
 						<div style={{ display: "flex", gap: 8, marginTop: 4 }}>
 							<Button type="submit" className="flex-1 gap-2" disabled={isPending}>
 								{isPending ? (
@@ -587,7 +390,7 @@ export function UsersClient({
 				</Modal>
 			)}
 
-			{/* Move to TAG modal */}
+			{/* Move to another TAG */}
 			{moveUser && (
 				<Modal
 					title={`Move to TAG — ${moveUser.name || moveUser.email}`}
@@ -601,25 +404,17 @@ export function UsersClient({
 								async () => {
 									await moveToTag(fd);
 								},
-								`${moveUser.name || moveUser.email} moved to new TAG`,
+								`${moveUser.name || moveUser.email} moved to a new TAG`,
 							);
 							setMoveUser(null);
 							moveFormRef.current?.reset();
 						}}
 					>
-						<p
-							style={{
-								fontSize: "0.85rem",
-								color: "hsl(var(--muted-foreground))",
-								marginBottom: 16,
-							}}
-						>
-							Currently in{" "}
-							<strong style={{ color: "var(--app-hero-text)" }}>
-								{moveUser.tag_short_name ?? "no TAG"}
-							</strong>
-							. Pick a new TAG:
+						<p className="users-muted" style={{ marginBottom: 12 }}>
+							Currently in <strong>{moveUser.tag_short_name ?? "no TAG"}</strong>. A TAG is shared
+							by B.Tech and M.Tech, so the move applies to both.
 						</p>
+						<MoveWarning user={moveUser} context={contexts[moveUser.id]} />
 						<FormField label="Destination TAG">
 							<SelectField name="tag_id" defaultValue={moveUser.tag_id ?? ""}>
 								{tags.map((t) => (
@@ -631,15 +426,7 @@ export function UsersClient({
 						</FormField>
 						<div style={{ display: "flex", gap: 8, marginTop: 4 }}>
 							<Button type="submit" className="flex-1 gap-2" disabled={isPending}>
-								{isPending ? (
-									<>
-										<Loader2 size={14} className="animate-spin" /> Moving…
-									</>
-								) : (
-									<>
-										<ArrowRightLeft size={14} /> Move
-									</>
-								)}
+								<ArrowRightLeft size={14} /> Move
 							</Button>
 							<Button type="button" variant="outline" onClick={() => setMoveUser(null)}>
 								Cancel
@@ -649,7 +436,7 @@ export function UsersClient({
 				</Modal>
 			)}
 
-			{/* Set password modal */}
+			{/* Set password */}
 			{pwdUser && (
 				<Modal
 					title={`Set Password — ${pwdUser.name || pwdUser.email}`}
@@ -678,15 +465,7 @@ export function UsersClient({
 						</FormField>
 						<div style={{ display: "flex", gap: 8, marginTop: 4 }}>
 							<Button type="submit" className="flex-1 gap-2" disabled={isPending}>
-								{isPending ? (
-									<>
-										<Loader2 size={14} className="animate-spin" /> Saving…
-									</>
-								) : (
-									<>
-										<KeyRound size={14} /> Set Password
-									</>
-								)}
+								<KeyRound size={14} /> Set Password
 							</Button>
 							<Button type="button" variant="outline" onClick={() => setPwdUser(null)}>
 								Cancel
@@ -696,17 +475,12 @@ export function UsersClient({
 				</Modal>
 			)}
 
-			{/* Delete confirm modal */}
+			{/* Delete */}
 			{deleteTarget && (
-				<Modal title="Delete User?" onClose={() => setDeleteTarget(null)}>
-					<p
-						style={{ fontSize: "0.88rem", color: "hsl(var(--muted-foreground))", marginBottom: 20 }}
-					>
-						This removes{" "}
-						<strong style={{ color: "var(--app-hero-text)" }}>
-							{deleteTarget.name || deleteTarget.email}
-						</strong>{" "}
-						and all the grades they&apos;ve entered. This cannot be undone.
+				<Modal title="Remove User?" onClose={() => setDeleteTarget(null)}>
+					<p className="users-muted" style={{ marginBottom: 20 }}>
+						This removes <strong>{deleteTarget.name || deleteTarget.email}</strong> and all the
+						grades they&apos;ve entered. This cannot be undone.
 					</p>
 					<div style={{ display: "flex", gap: 8 }}>
 						<Button
@@ -718,98 +492,15 @@ export function UsersClient({
 								fd.append("userId", deleteTarget.id);
 								act(async () => {
 									await deleteUser(fd);
-								}, "User deleted");
+								}, "User removed");
 								setDeleteTarget(null);
+								setSelectedId(null);
 							}}
 						>
-							{isPending ? (
-								<>
-									<Loader2 size={14} className="animate-spin" /> Deleting…
-								</>
-							) : (
-								<>
-									<Trash2 size={14} /> Delete
-								</>
-							)}
+							<Trash2 size={14} /> Remove
 						</Button>
 						<Button variant="outline" onClick={() => setDeleteTarget(null)}>
 							Cancel
-						</Button>
-					</div>
-				</Modal>
-			)}
-
-			{/* Roles modal */}
-			{roleUser && (
-				<Modal
-					title={`Roles — ${roleUser.name || roleUser.email}`}
-					onClose={() => setRoleUser(null)}
-				>
-					<p
-						style={{ fontSize: "0.83rem", color: "hsl(var(--muted-foreground))", marginBottom: 16 }}
-					>
-						Everyone is faculty. Turn on the admin roles this person should also have.
-						{!roleUser.tag_id && " Put them in a TAG first to make them a TAG admin."}
-					</p>
-					<div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-						{assignableRoles(access.roles, callerTagId, roleUser.tag_id).map((r) => {
-							const current = users.find((u) => u.id === roleUser.id) ?? roleUser;
-							const active = hasRole(
-								current.roles,
-								r.role,
-								r.program,
-								r.role === "tag_admin" ? current.tag_id : undefined,
-							);
-							return (
-								<label
-									key={`${r.role}:${r.program ?? ""}`}
-									style={{
-										display: "flex",
-										alignItems: "flex-start",
-										gap: 12,
-										padding: "12px 14px",
-										borderRadius: 10,
-										cursor: isPending ? "wait" : "pointer",
-										border: `1.5px solid ${active ? "hsl(var(--primary))" : "hsl(var(--border))"}`,
-										background: active ? "hsl(var(--primary) / 0.06)" : "hsl(var(--card))",
-										transition: "all 120ms ease",
-									}}
-								>
-									<input
-										type="checkbox"
-										checked={active}
-										disabled={isPending}
-										onChange={(e) => toggleRole(current, r, e.target.checked)}
-										style={{ marginTop: 3, accentColor: "hsl(var(--primary))" }}
-									/>
-									<div>
-										<div
-											style={{
-												fontSize: "0.88rem",
-												fontWeight: 700,
-												color: "var(--app-hero-text)",
-												marginBottom: 2,
-											}}
-										>
-											{r.label}
-										</div>
-										<div
-											style={{
-												fontSize: "0.76rem",
-												color: "hsl(var(--muted-foreground))",
-												lineHeight: 1.4,
-											}}
-										>
-											{r.description}
-										</div>
-									</div>
-								</label>
-							);
-						})}
-					</div>
-					<div style={{ display: "flex", gap: 8 }}>
-						<Button variant="outline" className="flex-1" onClick={() => setRoleUser(null)}>
-							Done
 						</Button>
 					</div>
 				</Modal>
@@ -818,65 +509,259 @@ export function UsersClient({
 	);
 }
 
-function RolePill({
+/** What a TAG move costs: TAG-admin roles and assignments in the old TAG, per program. */
+function MoveWarning({ user, context }: { user: UserRow; context: UserContext | undefined }) {
+	const lines: string[] = [];
+	for (const r of user.roles) {
+		if (r.role === "tag_admin" && r.tag_id === user.tag_id) {
+			lines.push(`Loses ${programLabel(r.program as Program)} TAG admin`);
+		}
+	}
+	const inOldTag = (a: AssignmentSummary) => a.tag_id === user.tag_id;
+	for (const p of ["btech", "mtech"] as Program[]) {
+		const t = programTerms(p);
+		const guide = context?.guide.filter((a) => a.program === p && inOldTag(a)).length ?? 0;
+		const panel = context?.panel.filter((a) => a.program === p && inOldTag(a)).length ?? 0;
+		if (guide || panel) {
+			lines.push(
+				`Stays assigned in the old TAG (${programLabel(p)}): guide of ${guide} ${guide === 1 ? t.unitLower : t.unitsLower}, panel for ${panel}. Reassign them if needed.`,
+			);
+		}
+	}
+	if (lines.length === 0) return null;
+	return (
+		<ul className="users-warning">
+			{lines.map((l) => (
+				<li key={l}>{l}</li>
+			))}
+		</ul>
+	);
+}
+
+function UserProfile({
 	user,
-	canEdit,
+	context,
+	programs,
+	tagName,
 	isPending,
-	onChangeRole,
+	onClose,
+	onToggleRole,
+	onPassword,
+	onMove,
+	onDelete,
 }: {
 	user: UserRow;
-	canEdit: boolean;
+	context: UserContext;
+	programs: Program[];
+	tagName: (id: string | null) => string | null;
 	isPending: boolean;
-	onChangeRole: () => void;
+	onClose: () => void;
+	onToggleRole: (r: AssignableRole, grant: boolean) => void;
+	onPassword: () => void;
+	onMove?: () => void;
+	onDelete?: () => void;
 }) {
-	const labels = roleLabels(user.roles);
+	const access = useAccess();
+	const isMe = user.id === access.userId;
+	const assignable = isMe ? [] : assignableRoles(access.roles, access.tagId, user.tag_id);
+	const canReset = canManageUser(access.roles, access.tagId, {
+		roles: user.roles,
+		tagId: user.tag_id,
+	});
+	const institutionRole = assignable.find((r) => r.role === "institution_admin");
 	const isInstAdmin = hasRole(user.roles, "institution_admin");
-	const isAdmin = labels.length > 0;
-	const icon = isInstAdmin ? (
-		<Building2 size={11} />
-	) : isAdmin ? (
-		<Shield size={11} />
-	) : (
-		<User size={11} />
-	);
-	const accent = isInstAdmin
-		? { bg: "hsl(327 73% 97%)", color: "hsl(336 75% 35%)", border: "hsl(327 60% 80%)" }
-		: isAdmin
-			? {
-					bg: "hsl(var(--primary) / 0.1)",
-					color: "hsl(var(--primary))",
-					border: "hsl(var(--primary) / 0.3)",
-				}
-			: {
-					bg: "hsl(var(--muted))",
-					color: "hsl(var(--muted-foreground))",
-					border: "hsl(var(--border))",
-				};
 
 	return (
-		<button
-			onClick={onChangeRole}
-			disabled={isPending || !canEdit}
-			title={canEdit ? "Change roles" : labels.join(", ") || "Faculty"}
-			style={{
-				display: "inline-flex",
-				alignItems: "center",
-				gap: 5,
-				padding: "4px 10px",
-				borderRadius: 999,
-				fontSize: "0.72rem",
-				fontWeight: 700,
-				border: `1px solid ${accent.border}`,
-				background: accent.bg,
-				color: accent.color,
-				cursor: canEdit ? "pointer" : "default",
-				opacity: isPending ? 0.5 : 1,
-				transition: "all 140ms ease",
-				whiteSpace: "nowrap",
-			}}
-		>
-			{icon}
-			{labels.length > 0 ? labels.join(" · ") : "Faculty"}
-		</button>
+		<div className="users-profile">
+			<div className="users-profile-head">
+				<span className="users-avatar is-large">{initialsOf(user.name, user.email)}</span>
+				<div style={{ minWidth: 0, flex: 1 }}>
+					<h2>{user.name || user.email}</h2>
+					<p className="users-muted">{user.email}</p>
+					<p className="users-profile-facts">
+						<span className="users-chip">{user.tag_short_name ?? "No TAG"}</span>
+						{isInstAdmin && (
+							<span className="users-chip is-institution">
+								<Building2 size={10} /> Institution Admin
+							</span>
+						)}
+						<span className="users-muted">
+							Joined {formatDate(user.created_at)} · Last sign-in {formatDate(user.last_sign_in_at)}
+						</span>
+					</p>
+				</div>
+				<button className="users-profile-close" onClick={onClose} aria-label="Close profile">
+					<X size={18} />
+				</button>
+			</div>
+
+			<div className="users-profile-actions">
+				{canReset && (
+					<Button
+						size="sm"
+						variant="outline"
+						className="gap-2"
+						onClick={onPassword}
+						disabled={isPending}
+					>
+						<KeyRound size={13} /> Set password
+					</Button>
+				)}
+				{onMove && (
+					<Button
+						size="sm"
+						variant="outline"
+						className="gap-2"
+						onClick={onMove}
+						disabled={isPending}
+					>
+						<ArrowRightLeft size={13} /> Move to TAG
+					</Button>
+				)}
+				{access.isAdmin && (
+					<Link href="/admin/assignments" className="users-link">
+						<ClipboardList size={13} /> Assign to {programTerms(access.program).unitsLower}
+					</Link>
+				)}
+				{onDelete && (
+					<Button
+						size="sm"
+						variant="destructive"
+						className="gap-2"
+						onClick={onDelete}
+						disabled={isPending}
+					>
+						<Trash2 size={13} /> Remove user
+					</Button>
+				)}
+			</div>
+
+			{institutionRole && (
+				<RoleToggle
+					role={institutionRole}
+					active={isInstAdmin}
+					disabled={isPending}
+					onChange={(grant) => onToggleRole(institutionRole, grant)}
+				/>
+			)}
+
+			<div className={`users-programs${programs.length > 1 ? " is-split" : ""}`}>
+				{programs.map((p) => {
+					const t = programTerms(p);
+					const roles = assignable.filter((r) => r.program === p);
+					const held = roleLabels(user.roles.filter((r) => r.program === p));
+					const guide = context.guide.filter((a) => a.program === p);
+					const panel = context.panel.filter((a) => a.program === p);
+					return (
+						<section key={p} className="users-program">
+							<h3>
+								<GraduationCap size={15} /> {programLabel(p)}
+							</h3>
+
+							<h4>Roles</h4>
+							{roles.length > 0 ? (
+								<div className="users-role-list">
+									{roles.map((r) => (
+										<RoleToggle
+											key={`${r.role}:${r.program}`}
+											role={r}
+											active={hasRole(
+												user.roles,
+												r.role,
+												r.program,
+												r.role === "tag_admin" ? user.tag_id : undefined,
+											)}
+											disabled={isPending}
+											onChange={(grant) => onToggleRole(r, grant)}
+										/>
+									))}
+								</div>
+							) : (
+								<p className="users-muted">
+									{held.length > 0 ? held.join(", ") : "Faculty"}
+									{!isMe && !user.tag_id && " · put them in a TAG to make them TAG admin"}
+								</p>
+							)}
+
+							<h4>Guide of</h4>
+							<AssignmentList
+								items={guide}
+								empty={`No ${t.unitsLower}`}
+								tagName={tagName}
+								showApproval
+							/>
+
+							<h4>Panel for</h4>
+							<AssignmentList items={panel} empty={`No ${t.unitsLower}`} tagName={tagName} />
+						</section>
+					);
+				})}
+			</div>
+		</div>
+	);
+}
+
+function RoleToggle({
+	role,
+	active,
+	disabled,
+	onChange,
+}: {
+	role: AssignableRole;
+	active: boolean;
+	disabled: boolean;
+	onChange: (grant: boolean) => void;
+}) {
+	return (
+		<label className={`users-role-toggle${active ? " is-active" : ""}`}>
+			<input
+				type="checkbox"
+				checked={active}
+				disabled={disabled}
+				onChange={(e) => onChange(e.target.checked)}
+			/>
+			<span>
+				<span className="users-role-name">{role.label}</span>
+				<span className="users-role-desc">{role.description}</span>
+			</span>
+		</label>
+	);
+}
+
+function AssignmentList({
+	items,
+	empty,
+	tagName,
+	showApproval,
+}: {
+	items: AssignmentSummary[];
+	empty: string;
+	tagName: (id: string | null) => string | null;
+	showApproval?: boolean;
+}) {
+	if (items.length === 0) return <p className="users-muted">{empty}</p>;
+	return (
+		<ul className="users-assignments">
+			{items.map((a) => (
+				<li key={a.group_id}>
+					<span className="users-assignment-name">{a.name}</span>
+					{a.project_title && <span className="users-assignment-title">{a.project_title}</span>}
+					<span className="users-assignment-meta">
+						{tagName(a.tag_id) && <span className="users-chip">{tagName(a.tag_id)}</span>}
+						{a.students} student{a.students === 1 ? "" : "s"}
+						{showApproval &&
+							(a.guide_approved ? (
+								<span className="users-ok">
+									<CheckCircle2 size={11} /> Approved
+								</span>
+							) : (
+								<span className="users-pending">
+									<Clock size={11} /> Pending
+								</span>
+							))}
+					</span>
+				</li>
+			))}
+		</ul>
 	);
 }
