@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { useProgram } from "@/components/ProgramContext";
+import { groupDisplayName, programTerms } from "@/lib/programs";
 import type { Group, Profile } from "@/types/database";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ type Tab = "panel" | "guide";
 export default function AssignmentsPage() {
 	const supabase = createClient();
 	const program = useProgram();
+	const terms = programTerms(program);
 
 	const [tab, setTab] = useState<Tab>("panel");
 	const [groups, setGroups] = useState<Group[]>([]);
@@ -45,7 +47,11 @@ export default function AssignmentsPage() {
 			if (profile?.role !== "institution_admin") tagId = profile?.tag_id ?? null;
 		}
 
-		let groupsQ = supabase.from("groups").select("*").eq("program", program).order("name");
+		let groupsQ = supabase
+			.from("groups")
+			.select("*, students(name)")
+			.eq("program", program)
+			.order("name");
 		let facultyQ = supabase.from("profiles").select("*").eq("role", "faculty").order("name");
 		if (tagId) {
 			groupsQ = groupsQ.eq("tag_id", tagId);
@@ -141,7 +147,7 @@ export default function AssignmentsPage() {
 				<div>
 					<h1 className="text-2xl font-bold">Assignments</h1>
 					<p className="text-muted-foreground">
-						Assign faculty to groups for panel and guide review.
+						Assign faculty to {terms.unitsLower} for panel and guide review.
 					</p>
 				</div>
 				<Button variant="outline" size="sm" onClick={loadData} className="gap-2">
@@ -202,7 +208,7 @@ export default function AssignmentsPage() {
 								<CardHeader className="pb-3">
 									<div className="flex items-center justify-between">
 										<div>
-											<CardTitle className="text-base">{group.name}</CardTitle>
+											<CardTitle className="text-base">{groupDisplayName(group)}</CardTitle>
 											{group.project_title && (
 												<CardDescription className="mt-0.5">{group.project_title}</CardDescription>
 											)}
@@ -266,7 +272,7 @@ export default function AssignmentsPage() {
 								<CardHeader className="pb-3">
 									<div className="flex items-center justify-between">
 										<div>
-											<CardTitle className="text-base">{group.name}</CardTitle>
+											<CardTitle className="text-base">{groupDisplayName(group)}</CardTitle>
 											{group.project_title && (
 												<CardDescription className="mt-0.5">{group.project_title}</CardDescription>
 											)}

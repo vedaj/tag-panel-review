@@ -2,6 +2,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { createAdminSupabaseClient } from "@/lib/supabase-admin";
 import { effectiveTagFilter } from "@/lib/admin-scope";
 import { getProgram } from "@/lib/program";
+import { groupDisplayName, programTerms } from "@/lib/programs";
 import type { Program } from "@/types/database";
 import Link from "next/link";
 import {
@@ -67,6 +68,7 @@ function GroupCard({
 	group: {
 		id: string;
 		name: string;
+		program?: Program;
 		project_title?: string;
 		students?: { id: string; name: string }[];
 		guide_approval_status?: string;
@@ -91,7 +93,7 @@ function GroupCard({
 					gap: 8,
 				}}
 			>
-				<span className="group-card-name">{group.name}</span>
+				<span className="group-card-name">{groupDisplayName(group)}</span>
 				<span className={`group-badge${done ? " done" : ""}`}>
 					{done ? "Done" : `${gradedCount}/${total}`}
 				</span>
@@ -186,7 +188,11 @@ async function InstitutionDashboard({
 					{[
 						{ icon: <Building2 size={18} />, value: tagCount, label: "TAGs" },
 						{ icon: <Users size={18} />, value: totals.faculty, label: "Faculty" },
-						{ icon: <ClipboardList size={18} />, value: totals.groups, label: "Groups" },
+						{
+							icon: <ClipboardList size={18} />,
+							value: totals.groups,
+							label: programTerms(program).units,
+						},
 						{ icon: <GraduationCap size={18} />, value: totals.students, label: "Students" },
 						{
 							icon: <TrendingUp size={18} />,
@@ -287,7 +293,7 @@ async function InstitutionDashboard({
 							>
 								{[
 									{ label: "Faculty", value: tag.faculty + tag.admins },
-									{ label: "Groups", value: tag.groups },
+									{ label: programTerms(program).units, value: tag.groups },
 									{ label: "Students", value: tag.students },
 								].map(({ label, value }) => (
 									<div key={label} style={{ textAlign: "center" }}>
@@ -369,6 +375,7 @@ export default async function DashboardPage() {
 	const isAdmin = profile?.role === "admin" || profile?.role === "institution_admin";
 	const tagId = await effectiveTagFilter(profile);
 	const program = (await getProgram()) ?? "btech";
+	const terms = programTerms(program);
 
 	// Institution admin in institution-wide scope → show TAG overview
 	if (profile?.role === "institution_admin" && !tagId) {
@@ -492,7 +499,7 @@ export default async function DashboardPage() {
 						<span className="stat-value">
 							{panelGroups.length + (isGuide ? guideGroups.length : 0)}
 						</span>
-						<span className="stat-label">Groups</span>
+						<span className="stat-label">{terms.units}</span>
 					</div>
 					<div className="stat-card">
 						<div className="stat-icon">
@@ -540,7 +547,7 @@ export default async function DashboardPage() {
 									letterSpacing: 0,
 								}}
 							>
-								{guideGroups.length} group{guideGroups.length !== 1 ? "s" : ""}
+								{guideGroups.length} {guideGroups.length !== 1 ? terms.unitsLower : terms.unitLower}
 							</span>
 						</h2>
 						<div className="group-grid">
@@ -558,7 +565,7 @@ export default async function DashboardPage() {
 												gap: 8,
 											}}
 										>
-											<span className="group-card-name">{group.name}</span>
+											<span className="group-card-name">{groupDisplayName(group)}</span>
 											<span className={`group-badge${approved ? " done" : ""}`}>
 												{approved ? "Approved" : `${gradedCount}/${ids.length}`}
 											</span>
@@ -641,7 +648,8 @@ export default async function DashboardPage() {
 										letterSpacing: 0,
 									}}
 								>
-									{panelPendingGroups.length} group{panelPendingGroups.length !== 1 ? "s" : ""}
+									{panelPendingGroups.length}{" "}
+									{panelPendingGroups.length !== 1 ? terms.unitsLower : terms.unitLower}
 								</span>
 							</h2>
 							<div className="group-grid">
@@ -674,7 +682,8 @@ export default async function DashboardPage() {
 										letterSpacing: 0,
 									}}
 								>
-									{panelCompletedGroups.length} group{panelCompletedGroups.length !== 1 ? "s" : ""}
+									{panelCompletedGroups.length}{" "}
+									{panelCompletedGroups.length !== 1 ? terms.unitsLower : terms.unitLower}
 								</span>
 							</h2>
 							<div className="group-grid">
@@ -708,8 +717,8 @@ export default async function DashboardPage() {
 										letterSpacing: 0,
 									}}
 								>
-									{pendingApprovalGroups.length} group
-									{pendingApprovalGroups.length !== 1 ? "s" : ""}
+									{pendingApprovalGroups.length}{" "}
+									{pendingApprovalGroups.length !== 1 ? terms.unitsLower : terms.unitLower}
 								</span>
 							</h2>
 							<div className="group-grid">
@@ -727,7 +736,7 @@ export default async function DashboardPage() {
 												gap: 8,
 											}}
 										>
-											<span className="group-card-name">{group.name}</span>
+											<span className="group-card-name">{groupDisplayName(group)}</span>
 											<span className={`group-badge`}>{group.students?.length ?? 0} students</span>
 										</div>
 										{group.project_title && (
@@ -751,7 +760,7 @@ export default async function DashboardPage() {
 
 			{panelGroups.length === 0 && !isGuide && (
 				<div className="dashboard-section">
-					<p className="section-subtitle">No groups assigned yet.</p>
+					<p className="section-subtitle">No {terms.unitsLower} assigned yet.</p>
 				</div>
 			)}
 		</>

@@ -1,7 +1,8 @@
 "use client";
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createClient } from "@/lib/supabase";
 import { useProgram } from "@/components/ProgramContext";
+import { programTerms } from "@/lib/programs";
 import {
 	parseStudentExcel,
 	parseFacultyExcel,
@@ -35,6 +36,15 @@ interface ImportResult {
 export default function ImportPage() {
 	const supabase = createClient();
 	const program = useProgram();
+	const terms = programTerms(program);
+
+	// M.Tech files have one row per student and no group_name: each student is
+	// their own project, stored under their roll number.
+	async function readStudentRows(file: File): Promise<StudentRow[]> {
+		const rows = await parseStudentExcel(file);
+		if (program !== "mtech") return rows;
+		return rows.map((r) => ({ ...r, group_name: String(r.roll_number ?? "").trim() }));
+	}
 	const studentFileRef = useRef<HTMLInputElement>(null);
 	const facultyFileRef = useRef<HTMLInputElement>(null);
 
@@ -45,11 +55,18 @@ export default function ImportPage() {
 	const [preview, setPreview] = useState<StudentRow[]>([]);
 	const [facultyPreview, setFacultyPreview] = useState<FacultyRow[]>([]);
 
+	// A file picked in the other program would be parsed with the wrong format
+	useEffect(() => {
+		setStudentFile(null);
+		setPreview([]);
+		if (studentFileRef.current) studentFileRef.current.value = "";
+	}, [program]);
+
 	async function handleStudentFileChange(e: React.ChangeEvent<HTMLInputElement>) {
 		const file = e.target.files?.[0];
 		if (!file) return;
 		setStudentFile(file);
-		const rows = await parseStudentExcel(file);
+		const rows = await readStudentRows(file);
 		setPreview(rows.slice(0, 5));
 	}
 
@@ -85,7 +102,7 @@ export default function ImportPage() {
 
 			// ── Import students ─────────────────────────────────────────────────
 			if (studentFile) {
-				const rows = await parseStudentExcel(studentFile);
+				const rows = await readStudentRows(studentFile);
 				const groupMap = new Map<string, string>(); // group_name -> id
 
 				// Get or create groups
@@ -129,7 +146,7 @@ export default function ImportPage() {
 							.single();
 
 						if (error) {
-							errors.push(`Group "${groupName}": ${error.message}`);
+							errors.push(`${terms.unit} "${groupName}": ${error.message}`);
 						} else if (newGroup) {
 							groupMap.set(groupName, newGroup.id);
 							groupsCreated++;
@@ -142,16 +159,14 @@ export default function ImportPage() {
 					const groupId = groupMap.get(row.group_name?.trim());
 					if (!groupId) continue;
 
-					const { error } = await supabase
-						.from("students")
-						.upsert(
-							{
-								name: row.student_name?.trim(),
-								roll_number: row.roll_number?.trim(),
-								group_id: groupId,
-							},
-							{ onConflict: "roll_number" },
-						);
+					const { error } = await supabase.from("students").upsert(
+						{
+							name: row.student_name?.trim(),
+							roll_number: row.roll_number?.trim(),
+							group_id: groupId,
+						},
+						{ onConflict: "roll_number" },
+					);
 
 					if (error) {
 						errors.push(`Student "${row.student_name}": ${error.message}`);
@@ -218,7 +233,7 @@ export default function ImportPage() {
 			<div className="mb-8">
 				<h1 className="text-2xl font-bold">Import Data</h1>
 				<p className="text-muted-foreground">
-					Upload your spreadsheets to add students, groups, and faculty accounts.
+					Upload your spreadsheets to add students, {terms.unitsLower}, and faculty accounts.
 				</p>
 			</div>
 
@@ -233,7 +248,9 @@ export default function ImportPage() {
 								<div>
 									<p className="font-medium text-blue-800">Students file:</p>
 									<code className="text-xs bg-white rounded px-1 py-0.5 text-blue-900 block mt-1">
-										group_name | project_title | guide1 | guide2 | student_name | roll_number
+										{program === "mtech"
+											? "student_name | roll_number | project_title | guide1 | guide2"
+											: "group_name | project_title | guide1 | guide2 | student_name | roll_number"}
 									</code>
 								</div>
 								<div>
@@ -254,10 +271,12 @@ export default function ImportPage() {
 					<CardHeader>
 						<CardTitle className="flex items-center gap-2 text-base">
 							<GraduationCap size={18} />
-							Students &amp; Groups
+							Students &amp; {terms.units}
 						</CardTitle>
 						<CardDescription>
-							One student per row — rows sharing a group_name form one group.
+							{program === "mtech"
+								? "One student per row — each student is their own M.Tech project."
+								: "One student per row — rows sharing a group_name form one group."}
 						</CardDescription>
 					</CardHeader>
 					<CardContent className="space-y-4">
@@ -282,8 +301,17 @@ export default function ImportPage() {
 								<p className="font-medium">Preview (first 5 rows):</p>
 								{preview.map((row, i) => (
 									<div key={i} className="bg-muted rounded px-2 py-1">
-										<span className="font-medium">{row.group_name}</span> — {row.student_name} (
-										{row.roll_number})
+										{program === "mtech" ? (
+											<>
+												<span className="font-medium">{row.student_name}</span> ({row.roll_number})
+												{row.project_title ? ` — ${row.project_title}` : ""}
+											</>
+										) : (
+											<>
+												<span className="font-medium">{row.group_name}</span> — {row.student_name} (
+												{row.roll_number})
+											</>
+										)}
 									</div>
 								))}
 							</div>
@@ -377,7 +405,7 @@ export default function ImportPage() {
 						<div className="grid grid-cols-3 gap-4">
 							<div className="text-center">
 								<p className="text-2xl font-bold text-primary">{result.groupsCreated}</p>
-								<p className="text-muted-foreground">Groups created</p>
+								<p className="text-muted-foreground">{terms.units} created</p>
 							</div>
 							<div className="text-center">
 								<p className="text-2xl font-bold text-primary">{result.studentsCreated}</p>

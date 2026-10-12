@@ -172,7 +172,7 @@ export default async function AnalyticsPage({
 		{ data: groupReviewStatuses },
 	] = await Promise.all([
 		groupsQuery,
-		supabase.from("students").select("*"),
+		supabase.from("students").select("*, group:groups!inner(program)").eq("group.program", program),
 		criteriaQuery,
 		isAdmin ? guideCriteriaQuery : Promise.resolve({ data: [] }),
 		myGradesQuery,
