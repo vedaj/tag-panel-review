@@ -1,4 +1,3 @@
-export type Role = "admin" | "faculty" | "institution_admin";
 export type ReviewStatus = "upcoming" | "active" | "locked";
 export type UnlockRequestStatus = "pending" | "approved" | "rejected";
 export type Program = "btech" | "mtech";
@@ -25,7 +24,6 @@ export interface Profile {
 	id: string;
 	name: string;
 	email: string;
-	role: Role;
 	tag_id: string | null;
 	created_at: string;
 	tag?: Tag;
