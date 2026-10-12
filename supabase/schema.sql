@@ -213,6 +213,6 @@ CREATE POLICY "feedback_admin_read" ON feedback FOR SELECT USING (is_admin());
 --   institution_admin                  global
 --   program_admin  + program           B.Tech Admin / M.Tech Admin
 --   tag_admin      + program + tag_id  tag_id = the member's home TAG
--- and are changed through grant_role() / revoke_role(). profiles.role is kept
--- in sync for the existing app (institution_admin, or 'admin' = B.Tech TAG admin).
+-- and are changed through grant_role() / revoke_role(). Migration 009 drops the
+-- profiles.role column created above.
 -- ============================================================
