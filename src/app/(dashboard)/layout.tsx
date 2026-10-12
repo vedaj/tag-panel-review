@@ -2,7 +2,6 @@ import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { DashboardShell } from "@/components/DashboardShell";
 import type { Tag } from "@/types/database";
-import { getAdminScope } from "@/lib/admin-scope";
 import { getProgram } from "@/lib/program";
 import { getAccess } from "@/lib/access";
 
@@ -33,18 +32,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
 	const access = await getAccess(supabase);
 	if (!access) redirect("/login");
-	// Institution and program admins can switch between every TAG and their own
-	const adminScope =
-		access.isInstitutionAdmin || access.isProgramAdmin ? await getAdminScope() : "tag";
 
 	return (
-		<DashboardShell
-			profile={profile}
-			tags={tags ?? []}
-			adminScope={adminScope}
-			program={program}
-			access={access}
-		>
+		<DashboardShell profile={profile} tags={tags ?? []} program={program} access={access}>
 			{children}
 		</DashboardShell>
 	);

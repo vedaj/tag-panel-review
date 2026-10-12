@@ -13,12 +13,11 @@ import {
 	Tag,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase";
-import { setAdminScope } from "@/app/actions/scope";
+import { setActingRole } from "@/app/actions/acting";
 import { setProgram } from "@/app/actions/program";
 import { PROGRAMS } from "@/lib/programs";
 import type { Profile, Program, Tag as TagType } from "@/types/database";
-import type { Access } from "@/lib/roles";
-import type { AdminScope } from "@/app/actions/scope";
+import { actingLabel, type Access, type ActingRole } from "@/lib/roles";
 
 type Theme = "light" | "dark";
 type FontMode = "serif" | "sans";
@@ -26,7 +25,6 @@ type FontMode = "serif" | "sans";
 export function TopBar({
 	profile,
 	tags,
-	adminScope,
 	program,
 	access,
 	sidebarOpen,
@@ -35,7 +33,6 @@ export function TopBar({
 }: {
 	profile: Profile | null;
 	tags: TagType[];
-	adminScope: AdminScope;
 	program: Program;
 	access: Access;
 	sidebarOpen: boolean;
@@ -45,17 +42,19 @@ export function TopBar({
 	const [menuOpen, setMenuOpen] = useState(false);
 	const [theme, setTheme] = useState<Theme>("light");
 	const [fontMode, setFontMode] = useState<FontMode>("serif");
-	const [scope, setScope] = useState<AdminScope>(adminScope);
 	const [activeProgram, setActiveProgram] = useState<Program>(program);
 	const [switchingProgram, startProgramTransition] = useTransition();
-	const [, startTransition] = useTransition();
+	const [switchingRole, startRoleTransition] = useTransition();
 	const menuRef = useRef<HTMLDivElement>(null);
 	const router = useRouter();
 	const supabase = createClient();
 
-	// Institution and program admins can switch between every TAG and their own
-	const canSwitchScope = access.isInstitutionAdmin || access.isProgramAdmin;
 	const homeTag = tags.find((t) => t.id === profile?.tag_id);
+
+	function optionLabel(role: ActingRole) {
+		const label = actingLabel(role, program);
+		return role === "tag" && homeTag ? `${label} · ${homeTag.short_name}` : label;
+	}
 
 	useEffect(() => {
 		try {
@@ -64,8 +63,7 @@ export function TopBar({
 			if (t) setTheme(t);
 			if (f) setFontMode(f);
 		} catch {}
-		setScope(adminScope);
-	}, [adminScope]);
+	}, []);
 
 	useEffect(() => {
 		setActiveProgram(program);
@@ -97,10 +95,9 @@ export function TopBar({
 		document.documentElement.classList.toggle("font-sans-ui", f === "sans");
 	}
 
-	function applyScope(s: AdminScope) {
-		setScope(s);
-		startTransition(async () => {
-			await setAdminScope(s);
+	function applyActing(role: ActingRole) {
+		startRoleTransition(async () => {
+			await setActingRole(role);
 			router.refresh();
 		});
 	}
@@ -157,7 +154,7 @@ export function TopBar({
 			{/* TAG context badge */}
 			{profile?.tag && (
 				<div className="topbar-tag-badge desktop-only">
-					{canSwitchScope && scope === "institution" ? (
+					{access.tagFilter === null ? (
 						<>
 							<Building2 size={12} />
 							<span>{access.isInstitutionAdmin ? "Institution" : "All TAGs"}</span>
@@ -193,6 +190,25 @@ export function TopBar({
 				))}
 			</div>
 
+			{/* Which of their roles the user is acting as */}
+			{access.actingOptions.length > 1 && (
+				<label className="acting-switch" title="Show the app as one of your roles">
+					<span className="acting-switch-label desktop-only">Acting as</span>
+					<select
+						value={access.acting}
+						disabled={switchingRole}
+						onChange={(e) => applyActing(e.target.value as ActingRole)}
+						aria-label="Acting as"
+					>
+						{access.actingOptions.map((role) => (
+							<option key={role} value={role}>
+								{optionLabel(role)}
+							</option>
+						))}
+					</select>
+				</label>
+			)}
+
 			{/* User menu — always visible */}
 			<div style={{ position: "relative", marginLeft: "auto" }} ref={menuRef}>
 				<button className="user-menu-pill" onClick={() => setMenuOpen((v) => !v)}>
@@ -224,36 +240,6 @@ export function TopBar({
 						</div>
 
 						<div className="user-menu-divider" />
-
-						{/* Institution admin: scope toggle */}
-						{canSwitchScope && homeTag && (
-							<>
-								<div className="user-menu-pref-section">
-									<div className="user-menu-pref-row">
-										<span className="user-menu-pref-label">View</span>
-										<div className="user-menu-pref-control">
-											<button
-												className={`pref-btn${scope === "institution" ? " pref-btn-active" : ""}`}
-												onClick={() => applyScope("institution")}
-												title="Institution-wide view"
-												style={{ width: "auto", padding: "0 8px", gap: 4, fontSize: "0.72rem" }}
-											>
-												<Building2 size={11} /> All
-											</button>
-											<button
-												className={`pref-btn${scope === "tag" ? " pref-btn-active" : ""}`}
-												onClick={() => applyScope("tag")}
-												title={`${homeTag.short_name} TAG admin view`}
-												style={{ width: "auto", padding: "0 8px", gap: 4, fontSize: "0.72rem" }}
-											>
-												<Tag size={11} /> {homeTag.short_name}
-											</button>
-										</div>
-									</div>
-								</div>
-								<div className="user-menu-divider" />
-							</>
-						)}
 
 						{/* Preferences */}
 						<div className="user-menu-pref-section">

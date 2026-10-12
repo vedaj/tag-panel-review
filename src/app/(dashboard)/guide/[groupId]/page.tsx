@@ -4,7 +4,8 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { notFound, redirect } from "next/navigation";
 import { GuideSheetClient } from "@/components/grading/GuideSheetClient";
 import { getActiveTagReview, isExpired } from "@/lib/review";
-import { canAdmin, type RoleRow } from "@/lib/roles";
+import { canAdmin } from "@/lib/roles";
+import { getAccess } from "@/lib/access";
 
 interface Props {
 	params: Promise<{ groupId: string }>;
@@ -30,12 +31,13 @@ export default async function GuidePage({ params }: Props) {
 	if (!group) notFound();
 
 	const isGuide = group.guide1_id === user.id || group.guide2_id === user.id;
-	const [{ data: profile }, { data: roles }] = await Promise.all([
+	// Roles in effect for the role the user is acting as
+	const [{ data: profile }, access] = await Promise.all([
 		supabase.from("profiles").select("tag_id").eq("id", user.id).single(),
-		supabase.from("user_roles").select("role, program, tag_id").eq("user_id", user.id),
+		getAccess(supabase),
 	]);
 	// Admin of this group's program + TAG
-	const isAdmin = canAdmin((roles ?? []) as RoleRow[], group.program ?? "btech", group.tag_id);
+	const isAdmin = canAdmin(access?.roles ?? [], group.program ?? "btech", group.tag_id);
 
 	if (!isGuide && !isAdmin) notFound();
 
