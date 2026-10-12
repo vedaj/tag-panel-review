@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { useProgram } from "@/components/ProgramContext";
+import { useAccess } from "@/components/AccessContext";
 import type { Criteria, SubCriteria, Review } from "@/types/database";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ const PROJECT_TYPE_OPTIONS = [
 export default function RubricsPage() {
 	const supabase = createClient();
 	const program = useProgram();
+	const access = useAccess();
 	const [activeTab, setActiveTab] = useState<Tab>("panel");
 	const [reviews, setReviews] = useState<Review[]>([]);
 	const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null);
@@ -33,7 +35,6 @@ export default function RubricsPage() {
 	const [savedMsg, setSavedMsg] = useState("");
 	const [expanded, setExpanded] = useState<Set<string>>(new Set());
 	const [callerTagId, setCallerTagId] = useState<string | null>(null);
-	const [callerRole, setCallerRole] = useState<string | null>(null);
 
 	useEffect(() => {
 		async function init() {
@@ -43,11 +44,10 @@ export default function RubricsPage() {
 			if (!user) return;
 			const { data: profile } = await supabase
 				.from("profiles")
-				.select("tag_id, role")
+				.select("tag_id")
 				.eq("id", user.id)
 				.single();
 			setCallerTagId(profile?.tag_id ?? null);
-			setCallerRole(profile?.role ?? null);
 
 			const { data: rv } = await supabase
 				.from("reviews")
@@ -364,7 +364,7 @@ export default function RubricsPage() {
 					}}
 				>
 					No reviews created yet.
-					{callerRole === "institution_admin"
+					{access.isInstitutionAdmin || access.isProgramAdmin
 						? " Create a review first from the Reviews page."
 						: " Ask the institution admin to create a review."}
 				</div>

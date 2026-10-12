@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase";
 import { useProgram } from "@/components/ProgramContext";
+import { useAccess } from "@/components/AccessContext";
 import { programLabel, programTerms } from "@/lib/programs";
 import {
 	generateAllReport,
@@ -67,6 +68,7 @@ const PROJECT_TYPES: { key: ProjectType; label: string; icon: React.ReactNode; c
 export default function ReportPage() {
 	const supabase = createClient();
 	const program = useProgram();
+	const access = useAccess();
 	const [stats, setStats] = useState<Stats | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [downloading, setDownloading] = useState<DownloadKey | null>(null);
@@ -76,24 +78,11 @@ export default function ReportPage() {
 	// Stats belong to one program; drop them when the user switches
 	useEffect(() => {
 		setStats(null);
-	}, [program]);
+	}, [program, access.tagFilter]);
 
 	async function loadStats() {
 		setLoading(true);
-		// Resolve caller's TAG for scoped queries
-		const {
-			data: { user },
-		} = await supabase.auth.getUser();
-		let tagId: string | null = null;
-		if (user) {
-			const { data: profile } = await supabase
-				.from("profiles")
-				.select("tag_id, role")
-				.eq("id", user.id)
-				.single();
-			// institution_admin in institution scope: no filter; otherwise filter by tag
-			if (profile?.role !== "institution_admin") tagId = profile?.tag_id ?? null;
-		}
+		const tagId = access.tagFilter;
 
 		let groupsQ = supabase.from("groups").select("*").eq("program", program).order("name");
 		let facultyQ = supabase.from("profiles").select("*");
@@ -122,18 +111,7 @@ export default function ReportPage() {
 	}
 
 	async function fetchAll(): Promise<ReportData> {
-		const {
-			data: { user },
-		} = await supabase.auth.getUser();
-		let tagId: string | null = null;
-		if (user) {
-			const { data: profile } = await supabase
-				.from("profiles")
-				.select("tag_id, role")
-				.eq("id", user.id)
-				.single();
-			if (profile?.role !== "institution_admin") tagId = profile?.tag_id ?? null;
-		}
+		const tagId = access.tagFilter;
 
 		let groupsQ = supabase.from("groups").select("*").eq("program", program).order("name");
 		let facultyQ = supabase.from("profiles").select("*");

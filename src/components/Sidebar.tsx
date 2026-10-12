@@ -1,176 +1,204 @@
-'use client'
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import type { Profile } from '@/types/database'
-import type { AdminScope } from '@/app/actions/scope'
+"use client";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import type { Profile } from "@/types/database";
+import type { Access } from "@/lib/roles";
 import {
-  GraduationCap,
-  LayoutDashboard,
-  BarChart2,
-  Upload,
-  BookOpen,
-  FileText,
-  Users as UsersIcon,
-  Building2,
-  ClipboardList,
-  CalendarRange,
-  X,
-} from 'lucide-react'
+	GraduationCap,
+	LayoutDashboard,
+	BarChart2,
+	Upload,
+	BookOpen,
+	FileText,
+	Users as UsersIcon,
+	Building2,
+	ClipboardList,
+	CalendarRange,
+	X,
+} from "lucide-react";
 
 interface NavItem {
-  label: string
-  href: string
-  icon: React.ElementType
-  adminOnly?: boolean
-  institutionOnly?: boolean
-  tagAdminOnly?: boolean
+	label: string;
+	href: string;
+	icon: React.ElementType;
+	adminOnly?: boolean;
+	institutionOnly?: boolean;
+	tagAdminOnly?: boolean;
+	programAdminOnly?: boolean;
 }
 
 const navItems: NavItem[] = [
-  { label: 'Dashboard',     href: '/dashboard',           icon: LayoutDashboard },
-  { label: 'Analytics',     href: '/analytics',            icon: BarChart2 },
-  { label: 'Import Data',   href: '/admin/import',         icon: Upload,        adminOnly: true },
-  { label: 'Reviews',       href: '/admin/tag-reviews',    icon: CalendarRange, tagAdminOnly: true },
-  { label: 'Rubrics',       href: '/admin/rubrics',        icon: BookOpen,      adminOnly: true },
-  { label: 'Assignments',   href: '/admin/assignments',    icon: ClipboardList, adminOnly: true },
-  { label: 'Report',        href: '/admin/report',         icon: FileText,      adminOnly: true },
-  { label: 'Users',         href: '/admin/users',          icon: UsersIcon,     adminOnly: true },
-  { label: 'All TAGs',      href: '/admin/institution',    icon: Building2,     institutionOnly: true },
-  { label: 'Reviews',       href: '/admin/reviews',        icon: CalendarRange, institutionOnly: true },
-]
+	{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+	{ label: "Analytics", href: "/analytics", icon: BarChart2 },
+	{ label: "Import Data", href: "/admin/import", icon: Upload, adminOnly: true },
+	{ label: "Reviews", href: "/admin/tag-reviews", icon: CalendarRange, tagAdminOnly: true },
+	{ label: "Rubrics", href: "/admin/rubrics", icon: BookOpen, adminOnly: true },
+	{ label: "Assignments", href: "/admin/assignments", icon: ClipboardList, adminOnly: true },
+	{ label: "Report", href: "/admin/report", icon: FileText, adminOnly: true },
+	{ label: "Users", href: "/admin/users", icon: UsersIcon, adminOnly: true },
+	{ label: "All TAGs", href: "/admin/institution", icon: Building2, institutionOnly: true },
+	{ label: "Reviews", href: "/admin/reviews", icon: CalendarRange, programAdminOnly: true },
+];
 
 interface SidebarProps {
-  profile: Profile | null
-  open: boolean
-  mobileOpen: boolean
-  adminScope: AdminScope
-  onMobileToggle: () => void
-  onMobileClose: () => void
+	profile: Profile | null;
+	open: boolean;
+	mobileOpen: boolean;
+	access: Access;
+	onMobileToggle: () => void;
+	onMobileClose: () => void;
 }
 
-export function Sidebar({ profile, open, mobileOpen, onMobileClose, adminScope }: SidebarProps) {
-  const pathname = usePathname()
-  const isTagAdmin = profile?.role === 'admin'
-  const isInstitutionAdmin = profile?.role === 'institution_admin'
+export function Sidebar({ profile, open, mobileOpen, onMobileClose, access }: SidebarProps) {
+	const pathname = usePathname();
+	// All checks are for the active program (see buildAccess)
+	const visibleItems = navItems.filter((item) => {
+		if (item.institutionOnly) return access.isInstitutionAdmin;
+		if (item.programAdminOnly) return access.isInstitutionAdmin || access.isProgramAdmin;
+		if (item.tagAdminOnly) return access.isTagAdmin;
+		if (item.adminOnly) return access.isAdmin;
+		return true;
+	});
 
-  const visibleItems = navItems.filter((item) => {
-    if (item.institutionOnly) return isInstitutionAdmin
-    if (item.tagAdminOnly) return isTagAdmin
-    if (item.adminOnly) return isTagAdmin || isInstitutionAdmin
-    return true
-  })
+	const NavLinks = ({ onNav, forceOpen }: { onNav?: () => void; forceOpen?: boolean }) => (
+		<div className="nav-group">
+			{visibleItems.map((item) => {
+				const active =
+					pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href));
+				const showLabel = forceOpen ?? open;
+				return (
+					<Link
+						key={item.href}
+						href={item.href}
+						onClick={onNav}
+						className={`nav-item${active ? " active" : ""}`}
+						title={!showLabel ? item.label : undefined}
+					>
+						<span className="nav-item-icon">
+							<item.icon size={18} />
+						</span>
+						{showLabel && <span className="nav-label">{item.label}</span>}
+					</Link>
+				);
+			})}
+		</div>
+	);
 
-  const NavLinks = ({ onNav, forceOpen }: { onNav?: () => void; forceOpen?: boolean }) => (
-    <div className="nav-group">
-      {visibleItems.map((item) => {
-        const active = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
-        const showLabel = forceOpen ?? open
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            onClick={onNav}
-            className={`nav-item${active ? ' active' : ''}`}
-            title={!showLabel ? item.label : undefined}
-          >
-            <span className="nav-item-icon">
-              <item.icon size={18} />
-            </span>
-            {showLabel && <span className="nav-label">{item.label}</span>}
-          </Link>
-        )
-      })}
-    </div>
-  )
+	const tagLabel = profile?.tag ? (profile.tag as { short_name: string }).short_name : null;
 
-  const tagLabel = profile?.tag
-    ? (profile.tag as { short_name: string }).short_name
-    : null
+	return (
+		<>
+			{/* Desktop sidebar */}
+			<aside className={`sidebar${open ? "" : " sidebar-collapsed"}`}>
+				{/* Brand block */}
+				<div className="brand-block">
+					<span
+						style={{
+							display: "inline-flex",
+							alignItems: "center",
+							justifyContent: "center",
+							width: 34,
+							height: 34,
+							borderRadius: 8,
+							flexShrink: 0,
+							background: "hsl(var(--primary) / 0.12)",
+							color: "hsl(var(--primary))",
+							boxShadow: "0 0 0 1px hsl(var(--primary) / 0.15)",
+						}}
+					>
+						<GraduationCap size={17} />
+					</span>
+					{open && (
+						<div style={{ minWidth: 0 }}>
+							<h2 className="brand-mark">TAG Panel Review</h2>
+							<p className="brand-caption">
+								{access.tagFilter === null && access.isAdmin
+									? "All TAGs"
+									: tagLabel
+										? `${tagLabel} TAG`
+										: ""}
+							</p>
+						</div>
+					)}
+				</div>
 
-  return (
-    <>
-      {/* Desktop sidebar */}
-      <aside className={`sidebar${open ? '' : ' sidebar-collapsed'}`}>
-        {/* Brand block */}
-        <div className="brand-block">
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-            width: 34, height: 34, borderRadius: 8, flexShrink: 0,
-            background: 'hsl(var(--primary) / 0.12)',
-            color: 'hsl(var(--primary))',
-            boxShadow: '0 0 0 1px hsl(var(--primary) / 0.15)',
-          }}>
-            <GraduationCap size={17} />
-          </span>
-          {open && (
-            <div style={{ minWidth: 0 }}>
-              <h2 className="brand-mark">TAG Panel Review</h2>
-              <p className="brand-caption">
-                {isInstitutionAdmin && adminScope === 'institution'
-                  ? 'All TAGs'
-                  : tagLabel
-                    ? `${tagLabel} TAG`
-                    : ''}
-              </p>
-            </div>
-          )}
-        </div>
+				{/* Nav */}
+				<nav className="nav-section">
+					{open && <p className="sidebar-section-title">Menu</p>}
+					<NavLinks />
+				</nav>
+			</aside>
 
-        {/* Nav */}
-        <nav className="nav-section">
-          {open && <p className="sidebar-section-title">Menu</p>}
-          <NavLinks />
-        </nav>
-      </aside>
+			{/* Mobile drawer */}
+			{mobileOpen && (
+				<div style={{ position: "fixed", inset: 0, zIndex: 50, display: "flex" }}>
+					<div
+						style={{
+							width: 280,
+							overflowY: "auto",
+							background: "color-mix(in srgb, var(--sidebar) 96%, transparent)",
+							borderRight: "1px solid hsl(var(--border) / 0.8)",
+							backdropFilter: "blur(20px)",
+						}}
+					>
+						{/* Mobile drawer header */}
+						<div
+							style={{
+								display: "flex",
+								alignItems: "center",
+								justifyContent: "space-between",
+								padding: "16px 16px 12px",
+							}}
+						>
+							<div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+								<span
+									style={{
+										display: "inline-flex",
+										alignItems: "center",
+										justifyContent: "center",
+										width: 34,
+										height: 34,
+										borderRadius: 8,
+										background: "hsl(var(--primary) / 0.12)",
+										color: "hsl(var(--primary))",
+										boxShadow: "0 0 0 1px hsl(var(--primary) / 0.15)",
+									}}
+								>
+									<GraduationCap size={17} />
+								</span>
+								<div>
+									<h2 className="brand-mark">TAG Panel Review</h2>
+									<p className="brand-caption">
+										{access.tagFilter === null && access.isAdmin
+											? "All TAGs"
+											: tagLabel
+												? `${tagLabel} TAG`
+												: ""}
+									</p>
+								</div>
+							</div>
+							<button
+								onClick={onMobileClose}
+								style={{
+									padding: 6,
+									background: "transparent",
+									border: "none",
+									cursor: "pointer",
+									color: "hsl(var(--muted-foreground))",
+								}}
+							>
+								<X size={18} />
+							</button>
+						</div>
 
-      {/* Mobile drawer */}
-      {mobileOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex' }}>
-          <div style={{
-            width: 280, overflowY: 'auto',
-            background: 'color-mix(in srgb, var(--sidebar) 96%, transparent)',
-            borderRight: '1px solid hsl(var(--border) / 0.8)',
-            backdropFilter: 'blur(20px)',
-          }}>
-            {/* Mobile drawer header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 16px 12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  width: 34, height: 34, borderRadius: 8,
-                  background: 'hsl(var(--primary) / 0.12)',
-                  color: 'hsl(var(--primary))',
-                  boxShadow: '0 0 0 1px hsl(var(--primary) / 0.15)',
-                }}>
-                  <GraduationCap size={17} />
-                </span>
-                <div>
-                  <h2 className="brand-mark">TAG Panel Review</h2>
-                  <p className="brand-caption">
-                    {isInstitutionAdmin && adminScope === 'institution'
-                      ? 'All TAGs'
-                      : tagLabel
-                        ? `${tagLabel} TAG`
-                        : ''}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={onMobileClose}
-                style={{ padding: 6, background: 'transparent', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))' }}
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <nav style={{ padding: '4px 12px 20px' }}>
-              <p className="sidebar-section-title">Menu</p>
-              <NavLinks onNav={onMobileClose} forceOpen />
-            </nav>
-          </div>
-          <div style={{ flex: 1, background: 'rgba(0,0,0,0.4)' }} onClick={onMobileClose} />
-        </div>
-      )}
-    </>
-  )
+						<nav style={{ padding: "4px 12px 20px" }}>
+							<p className="sidebar-section-title">Menu</p>
+							<NavLinks onNav={onMobileClose} forceOpen />
+						</nav>
+					</div>
+					<div style={{ flex: 1, background: "rgba(0,0,0,0.4)" }} onClick={onMobileClose} />
+				</div>
+			)}
+		</>
+	);
 }

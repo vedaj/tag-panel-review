@@ -5,18 +5,22 @@ import type { AdminScope } from "@/app/actions/scope";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ProgramProvider } from "./ProgramContext";
+import { AccessProvider } from "./AccessContext";
+import type { Access } from "@/lib/roles";
 
 export function DashboardShell({
 	profile,
 	tags,
 	adminScope,
 	program,
+	access,
 	children,
 }: {
 	profile: Profile | null;
 	tags: Tag[];
 	adminScope: AdminScope;
 	program: Program;
+	access: Access;
 	children: React.ReactNode;
 }) {
 	const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -50,7 +54,7 @@ export function DashboardShell({
 				mobileOpen={mobileOpen}
 				onMobileToggle={() => setMobileOpen((v) => !v)}
 				onMobileClose={() => setMobileOpen(false)}
-				adminScope={adminScope}
+				access={access}
 			/>
 			<div className="content-column">
 				<TopBar
@@ -58,12 +62,15 @@ export function DashboardShell({
 					tags={tags}
 					adminScope={adminScope}
 					program={program}
+					access={access}
 					sidebarOpen={sidebarOpen}
 					onDesktopToggle={toggleDesktop}
 					onMobileToggle={() => setMobileOpen((v) => !v)}
 				/>
 				<div className="page-content">
-					<ProgramProvider program={program}>{children}</ProgramProvider>
+					<ProgramProvider program={program}>
+						<AccessProvider access={access}>{children}</AccessProvider>
+					</ProgramProvider>
 				</div>
 			</div>
 		</div>

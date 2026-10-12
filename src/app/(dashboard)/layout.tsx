@@ -4,6 +4,7 @@ import { DashboardShell } from "@/components/DashboardShell";
 import type { Tag } from "@/types/database";
 import { getAdminScope } from "@/lib/admin-scope";
 import { getProgram } from "@/lib/program";
+import { getAccess } from "@/lib/access";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
 	const supabase = await createServerSupabaseClient();
@@ -30,10 +31,20 @@ export default async function DashboardLayout({ children }: { children: React.Re
 		data: Tag[] | null;
 	};
 
-	const adminScope = profile?.role === "institution_admin" ? await getAdminScope() : "tag";
+	const access = await getAccess(supabase);
+	if (!access) redirect("/login");
+	// Institution and program admins can switch between every TAG and their own
+	const adminScope =
+		access.isInstitutionAdmin || access.isProgramAdmin ? await getAdminScope() : "tag";
 
 	return (
-		<DashboardShell profile={profile} tags={tags ?? []} adminScope={adminScope} program={program}>
+		<DashboardShell
+			profile={profile}
+			tags={tags ?? []}
+			adminScope={adminScope}
+			program={program}
+			access={access}
+		>
 			{children}
 		</DashboardShell>
 	);

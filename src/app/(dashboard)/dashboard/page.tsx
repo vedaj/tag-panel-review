@@ -1,7 +1,7 @@
 import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { createAdminSupabaseClient } from "@/lib/supabase-admin";
-import { effectiveTagFilter } from "@/lib/admin-scope";
-import { getProgram } from "@/lib/program";
+import { redirect } from "next/navigation";
+import { getAccess } from "@/lib/access";
 import { groupDisplayName, programTerms } from "@/lib/programs";
 import type { Program } from "@/types/database";
 import Link from "next/link";
@@ -126,15 +126,22 @@ async function InstitutionDashboard({
 	program: Program;
 }) {
 	const admin = createAdminSupabaseClient();
-	const [{ data: tags }, { data: profiles }, { data: groups }, { data: grades }] =
-		await Promise.all([
-			admin.from("tags").select("*").order("short_name"),
-			admin.from("profiles").select("id, role, tag_id"),
-			admin.from("groups").select("id, tag_id, students(id)").eq("program", program),
-			admin.from("grades").select("student_id").gt("marks", 0),
-		]);
+	const [
+		{ data: tags },
+		{ data: profiles },
+		{ data: tagAdmins },
+		{ data: groups },
+		{ data: grades },
+	] = await Promise.all([
+		admin.from("tags").select("*").order("short_name"),
+		admin.from("profiles").select("id, tag_id"),
+		admin.from("user_roles").select("user_id").eq("role", "tag_admin").eq("program", program),
+		admin.from("groups").select("id, tag_id, students(id)").eq("program", program),
+		admin.from("grades").select("student_id").gt("marks", 0),
+	]);
 
 	const gradedSet = new Set((grades ?? []).map((g: { student_id: string }) => g.student_id));
+	const tagAdminIds = new Set((tagAdmins ?? []).map((r: { user_id: string }) => r.user_id));
 
 	const tagStats = (tags ?? []).map((tag) => {
 		const tagProfiles = (profiles ?? []).filter(
@@ -149,8 +156,8 @@ async function InstitutionDashboard({
 			id: tag.id,
 			name: tag.name,
 			short_name: tag.short_name,
-			faculty: (tagProfiles as { role: string }[]).filter((p) => p.role === "faculty").length,
-			admins: (tagProfiles as { role: string }[]).filter((p) => p.role === "admin").length,
+			faculty: (tagProfiles as { id: string }[]).filter((p) => !tagAdminIds.has(p.id)).length,
+			admins: (tagProfiles as { id: string }[]).filter((p) => tagAdminIds.has(p.id)).length,
 			groups: tagGroups.length,
 			students,
 			graded,
@@ -362,27 +369,27 @@ async function InstitutionDashboard({
 
 export default async function DashboardPage() {
 	const supabase = await createServerSupabaseClient();
-	const {
-		data: { user },
-	} = await supabase.auth.getUser();
+	const access = await getAccess(supabase);
+	if (!access) redirect("/login");
+	const user = { id: access.userId };
 
 	const { data: profile } = await supabase
 		.from("profiles")
 		.select("*, tag:tags(*)")
-		.eq("id", user!.id)
+		.eq("id", user.id)
 		.single();
 
-	const isAdmin = profile?.role === "admin" || profile?.role === "institution_admin";
-	const tagId = await effectiveTagFilter(profile);
-	const program = (await getProgram()) ?? "btech";
+	const isAdmin = access.isAdmin;
+	const tagId = access.tagFilter;
+	const program = access.program;
 	const terms = programTerms(program);
 
-	// Institution admin in institution-wide scope → show TAG overview
-	if (profile?.role === "institution_admin" && !tagId) {
+	// Institution / program admin viewing every TAG → show TAG overview
+	if ((access.isInstitutionAdmin || access.isProgramAdmin) && !tagId) {
 		const { data: tags } = await supabase.from("tags").select("id");
 		return (
 			<InstitutionDashboard
-				name={profile.name ?? ""}
+				name={profile?.name ?? ""}
 				tagCount={tags?.length ?? 0}
 				program={program}
 			/>

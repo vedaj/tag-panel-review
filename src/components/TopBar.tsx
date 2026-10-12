@@ -17,6 +17,7 @@ import { setAdminScope } from "@/app/actions/scope";
 import { setProgram } from "@/app/actions/program";
 import { PROGRAMS } from "@/lib/programs";
 import type { Profile, Program, Tag as TagType } from "@/types/database";
+import type { Access } from "@/lib/roles";
 import type { AdminScope } from "@/app/actions/scope";
 
 type Theme = "light" | "dark";
@@ -27,6 +28,7 @@ export function TopBar({
 	tags,
 	adminScope,
 	program,
+	access,
 	sidebarOpen,
 	onDesktopToggle,
 	onMobileToggle,
@@ -35,6 +37,7 @@ export function TopBar({
 	tags: TagType[];
 	adminScope: AdminScope;
 	program: Program;
+	access: Access;
 	sidebarOpen: boolean;
 	onDesktopToggle: () => void;
 	onMobileToggle: () => void;
@@ -50,7 +53,8 @@ export function TopBar({
 	const router = useRouter();
 	const supabase = createClient();
 
-	const isInstitutionAdmin = profile?.role === "institution_admin";
+	// Institution and program admins can switch between every TAG and their own
+	const canSwitchScope = access.isInstitutionAdmin || access.isProgramAdmin;
 	const homeTag = tags.find((t) => t.id === profile?.tag_id);
 
 	useEffect(() => {
@@ -153,10 +157,10 @@ export function TopBar({
 			{/* TAG context badge */}
 			{profile?.tag && (
 				<div className="topbar-tag-badge desktop-only">
-					{isInstitutionAdmin && scope === "institution" ? (
+					{canSwitchScope && scope === "institution" ? (
 						<>
 							<Building2 size={12} />
-							<span>Institution</span>
+							<span>{access.isInstitutionAdmin ? "Institution" : "All TAGs"}</span>
 						</>
 					) : (
 						<>
@@ -197,9 +201,7 @@ export function TopBar({
 					</span>
 					<span className="user-menu-info desktop-only">
 						<span className="user-menu-name">{profile?.name ?? "Faculty"}</span>
-						<span className="user-menu-role">
-							{isInstitutionAdmin ? "Institution Admin" : profile?.role}
-						</span>
+						<span className="user-menu-role">{access.roleLabel}</span>
 					</span>
 				</button>
 
@@ -213,7 +215,7 @@ export function TopBar({
 							<div style={{ minWidth: 0 }}>
 								<p className="user-menu-fullname">{profile?.name}</p>
 								<p className="user-menu-badge">
-									{isInstitutionAdmin ? "Institution Admin" : profile?.role}
+									{access.roleLabel}
 									{profile?.tag && (
 										<span style={{ opacity: 0.7 }}> · {profile.tag.short_name}</span>
 									)}
@@ -224,7 +226,7 @@ export function TopBar({
 						<div className="user-menu-divider" />
 
 						{/* Institution admin: scope toggle */}
-						{isInstitutionAdmin && homeTag && (
+						{canSwitchScope && homeTag && (
 							<>
 								<div className="user-menu-pref-section">
 									<div className="user-menu-pref-row">
