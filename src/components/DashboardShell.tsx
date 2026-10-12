@@ -1,7 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
 import type { Profile, Program, Tag } from "@/types/database";
-import type { AdminScope } from "@/app/actions/scope";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { ProgramProvider } from "./ProgramContext";
@@ -11,14 +10,12 @@ import type { Access } from "@/lib/roles";
 export function DashboardShell({
 	profile,
 	tags,
-	adminScope,
 	program,
 	access,
 	children,
 }: {
 	profile: Profile | null;
 	tags: Tag[];
-	adminScope: AdminScope;
 	program: Program;
 	access: Access;
 	children: React.ReactNode;
@@ -60,7 +57,6 @@ export function DashboardShell({
 				<TopBar
 					profile={profile}
 					tags={tags}
-					adminScope={adminScope}
 					program={program}
 					access={access}
 					sidebarOpen={sidebarOpen}

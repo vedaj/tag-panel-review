@@ -50,6 +50,7 @@ async function requireCanManage(userId: string) {
 async function createUser(formData: FormData) {
 	"use server";
 	const { supabase, access } = await requireAdmin();
+	if (!access.isInstitutionAdmin) throw new Error("Only institution admins can add users");
 
 	const name = formData.get("name") as string;
 	const email = formData.get("email") as string;
@@ -105,7 +106,9 @@ async function setRole(formData: FormData) {
 async function moveToTag(formData: FormData) {
 	"use server";
 	const { access } = await requireAdmin();
-	if (!access.isInstitutionAdmin) throw new Error("Forbidden — institution admin only");
+	if (!access.isInstitutionAdmin && !access.isProgramAdmin) {
+		throw new Error("Only institution and program admins can move users between TAGs");
+	}
 
 	const userId = formData.get("userId") as string;
 	const tagId = formData.get("tag_id") as string;
@@ -131,6 +134,7 @@ async function deleteUser(formData: FormData) {
 	const userId = formData.get("userId") as string;
 
 	const { access, admin } = await requireCanManage(userId);
+	if (!access.isInstitutionAdmin) throw new Error("Only institution admins can remove users");
 	if (userId === access.userId) throw new Error("Cannot delete yourself");
 
 	await admin.auth.admin.deleteUser(userId);

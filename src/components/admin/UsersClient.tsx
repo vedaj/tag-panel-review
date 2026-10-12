@@ -270,9 +270,11 @@ export function UsersClient({
 						{users.length} registered account{users.length !== 1 ? "s" : ""}
 					</p>
 				</div>
-				<Button onClick={() => setShowCreate(true)} className="gap-2 flex-shrink-0" size="sm">
-					<UserPlus size={15} /> New User
-				</Button>
+				{isInstitutionAdmin && (
+					<Button onClick={() => setShowCreate(true)} className="gap-2 flex-shrink-0" size="sm">
+						<UserPlus size={15} /> New User
+					</Button>
+				)}
 			</div>
 
 			{/* Feedback banner */}
@@ -434,7 +436,7 @@ export function UsersClient({
 									</td>
 									<td style={{ padding: "10px 14px" }}>
 										<div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-											{isInstitutionAdmin && (
+											{(isInstitutionAdmin || access.isProgramAdmin) && (
 												<button
 													onClick={() => setMoveUser(u)}
 													title="Move to a different TAG"
@@ -479,31 +481,27 @@ export function UsersClient({
 													<KeyRound size={12} /> Password
 												</button>
 											)}
-											{!isMe &&
-												canManageUser(access.roles, callerTagId, {
-													roles: u.roles,
-													tagId: u.tag_id,
-												}) && (
-													<button
-														onClick={() => setDeleteTarget(u)}
-														title="Delete user"
-														style={{
-															display: "inline-flex",
-															alignItems: "center",
-															gap: 4,
-															padding: "4px 10px",
-															borderRadius: 999,
-															fontSize: "0.72rem",
-															fontWeight: 600,
-															border: "1px solid hsl(var(--destructive) / 0.3)",
-															background: "hsl(var(--destructive) / 0.06)",
-															color: "hsl(var(--destructive))",
-															cursor: "pointer",
-														}}
-													>
-														<Trash2 size={12} />
-													</button>
-												)}
+											{!isMe && isInstitutionAdmin && (
+												<button
+													onClick={() => setDeleteTarget(u)}
+													title="Delete user"
+													style={{
+														display: "inline-flex",
+														alignItems: "center",
+														gap: 4,
+														padding: "4px 10px",
+														borderRadius: 999,
+														fontSize: "0.72rem",
+														fontWeight: 600,
+														border: "1px solid hsl(var(--destructive) / 0.3)",
+														background: "hsl(var(--destructive) / 0.06)",
+														color: "hsl(var(--destructive))",
+														cursor: "pointer",
+													}}
+												>
+													<Trash2 size={12} />
+												</button>
+											)}
 										</div>
 									</td>
 								</tr>

@@ -4,7 +4,8 @@ import { createServerSupabaseClient } from "@/lib/supabase-server";
 import { notFound, redirect } from "next/navigation";
 import { GradingSheetClient } from "@/components/grading/GradingSheetClient";
 import { getActiveTagReview, isExpired } from "@/lib/review";
-import { canAdmin, type RoleRow } from "@/lib/roles";
+import { canAdmin } from "@/lib/roles";
+import { getAccess } from "@/lib/access";
 
 interface Props {
 	params: Promise<{ groupId: string }>;
@@ -21,10 +22,8 @@ export default async function GradePage({ params }: Props) {
 
 	const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
 
-	const { data: roles } = await supabase
-		.from("user_roles")
-		.select("role, program, tag_id")
-		.eq("user_id", user.id);
+	// Roles in effect for the role the user is acting as
+	const access = await getAccess(supabase);
 
 	// Fetch group with students
 	const { data: group } = await supabase
@@ -36,7 +35,7 @@ export default async function GradePage({ params }: Props) {
 	if (!group) notFound();
 
 	// Admin of this group's program + TAG, otherwise must be on its panel
-	const isAdmin = canAdmin((roles ?? []) as RoleRow[], group.program ?? "btech", group.tag_id);
+	const isAdmin = canAdmin(access?.roles ?? [], group.program ?? "btech", group.tag_id);
 	if (!isAdmin) {
 		const { data: assignment } = await supabase
 			.from("panel_assignments")

@@ -741,6 +741,30 @@ body {
 	cursor: wait;
 }
 
+.acting-switch {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	margin-left: 10px;
+	font-size: 0.75rem;
+	color: var(--app-hero-subtext);
+}
+
+.acting-switch select {
+	padding: 4px 10px;
+	border-radius: 999px;
+	border: 1px solid var(--app-panel-border);
+	background: var(--app-panel);
+	color: var(--app-hero-text);
+	font-size: 0.78rem;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.acting-switch select:disabled {
+	cursor: wait;
+}
+
 .topbar-tag-badge {
 	display: inline-flex;
 	align-items: center;
