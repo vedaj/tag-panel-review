@@ -39,6 +39,10 @@ export default function RubricsPage() {
 	const [creatingReview, setCreatingReview] = useState(false);
 	const [reviewError, setReviewError] = useState<string | null>(null);
 	const canCreateReview = access.isInstitutionAdmin || access.isProgramAdmin;
+	// Shown on the disabled Add / Save buttons while the program has no review
+	const noReviewHint = selectedReviewId
+		? undefined
+		: `Create a ${programLabel(program)} review first — rubrics belong to a review.`;
 
 	useEffect(() => {
 		async function init() {
@@ -325,8 +329,8 @@ export default function RubricsPage() {
 				</div>
 				<div className="flex items-center gap-3">
 					{savedMsg && <span className="text-sm text-green-600 font-medium">{savedMsg}</span>}
-					{selectedReviewId && (
-						<Button onClick={handleSave} disabled={saving} className="gap-2">
+					<span title={noReviewHint}>
+						<Button onClick={handleSave} disabled={saving || !selectedReviewId} className="gap-2">
 							{saving ? (
 								<>
 									<Loader2 className="animate-spin" size={15} />
@@ -339,7 +343,7 @@ export default function RubricsPage() {
 								</>
 							)}
 						</Button>
-					)}
+					</span>
 				</div>
 			</div>
 
@@ -679,11 +683,28 @@ export default function RubricsPage() {
 					</Card>
 				))}
 
-				{selectedReviewId && (
-					<Button variant="outline" className="w-full gap-2 border-dashed" onClick={addCriteria}>
+				<div title={noReviewHint}>
+					<Button
+						variant="outline"
+						className="w-full gap-2 border-dashed"
+						onClick={addCriteria}
+						disabled={!selectedReviewId}
+					>
 						<Plus size={16} />
 						Add {activeTab === "guide" ? "Guide" : "Panel"} Criterion
 					</Button>
+				</div>
+				{noReviewHint && !loading && (
+					<p
+						style={{
+							margin: "6px 0 0",
+							fontSize: "0.8rem",
+							color: "hsl(var(--muted-foreground))",
+							textAlign: "center",
+						}}
+					>
+						{noReviewHint}
+					</p>
 				)}
 			</div>
 		</div>
