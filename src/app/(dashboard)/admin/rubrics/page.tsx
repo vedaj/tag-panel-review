@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase";
 import { useProgram } from "@/components/ProgramContext";
 import { useAccess } from "@/components/AccessContext";
+import { programLabel } from "@/lib/programs";
 import type { Criteria, SubCriteria, Review } from "@/types/database";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,6 +36,9 @@ export default function RubricsPage() {
 	const [savedMsg, setSavedMsg] = useState("");
 	const [expanded, setExpanded] = useState<Set<string>>(new Set());
 	const [callerTagId, setCallerTagId] = useState<string | null>(null);
+	const [creatingReview, setCreatingReview] = useState(false);
+	const [reviewError, setReviewError] = useState<string | null>(null);
+	const canCreateReview = access.isInstitutionAdmin || access.isProgramAdmin;
 
 	useEffect(() => {
 		async function init() {
@@ -69,6 +73,35 @@ export default function RubricsPage() {
 		init();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [program]);
+
+	// Rubrics belong to a review, so a program needs one before criteria can be added
+	async function createFirstReview() {
+		setCreatingReview(true);
+		setReviewError(null);
+		const { data: rv, error } = await supabase
+			.from("reviews")
+			.insert({ name: "Review 1", order_index: 0, program })
+			.select()
+			.single();
+		if (error || !rv) {
+			setReviewError(error?.message ?? "Could not create the review");
+			setCreatingReview(false);
+			return;
+		}
+		// Every TAG gets it as 'upcoming', like the Reviews page does
+		const { data: tags } = await supabase.from("tags").select("id");
+		if (tags && tags.length > 0) {
+			const { error: trError } = await supabase
+				.from("tag_reviews")
+				.insert(tags.map((t) => ({ tag_id: t.id, review_id: rv.id, status: "upcoming" })));
+			if (trError)
+				setReviewError(`Review created, but not set up for every TAG: ${trError.message}`);
+		}
+		setReviews([rv]);
+		setSelectedReviewId(rv.id);
+		setCriteria([]);
+		setCreatingReview(false);
+	}
 
 	async function loadCriteria(reviewId: string, tagId?: string | null) {
 		setLoading(true);
@@ -292,19 +325,21 @@ export default function RubricsPage() {
 				</div>
 				<div className="flex items-center gap-3">
 					{savedMsg && <span className="text-sm text-green-600 font-medium">{savedMsg}</span>}
-					<Button onClick={handleSave} disabled={saving} className="gap-2">
-						{saving ? (
-							<>
-								<Loader2 className="animate-spin" size={15} />
-								Saving…
-							</>
-						) : (
-							<>
-								<Save size={15} />
-								Save All
-							</>
-						)}
-					</Button>
+					{selectedReviewId && (
+						<Button onClick={handleSave} disabled={saving} className="gap-2">
+							{saving ? (
+								<>
+									<Loader2 className="animate-spin" size={15} />
+									Saving…
+								</>
+							) : (
+								<>
+									<Save size={15} />
+									Save All
+								</>
+							)}
+						</Button>
+					)}
 				</div>
 			</div>
 
@@ -363,10 +398,27 @@ export default function RubricsPage() {
 						marginBottom: 20,
 					}}
 				>
-					No reviews created yet.
-					{access.isInstitutionAdmin || access.isProgramAdmin
-						? " Create a review first from the Reviews page."
-						: " Ask the institution admin to create a review."}
+					<p style={{ margin: 0 }}>
+						{programLabel(program)} has no reviews yet. Rubrics belong to a review, so one has to
+						exist before you can add criteria.
+						{!canCreateReview &&
+							` Ask the institution admin or the ${programLabel(program)} Admin to create it.`}
+					</p>
+					{canCreateReview && (
+						<Button
+							size="sm"
+							className="gap-2"
+							style={{ marginTop: 10 }}
+							onClick={createFirstReview}
+							disabled={creatingReview}
+						>
+							{creatingReview ? <Loader2 className="animate-spin" size={14} /> : <Plus size={14} />}
+							Create {programLabel(program)} Review 1
+						</Button>
+					)}
+					{reviewError && (
+						<p style={{ margin: "8px 0 0", color: "hsl(var(--destructive))" }}>{reviewError}</p>
+					)}
 				</div>
 			)}
 
@@ -627,10 +679,12 @@ export default function RubricsPage() {
 					</Card>
 				))}
 
-				<Button variant="outline" className="w-full gap-2 border-dashed" onClick={addCriteria}>
-					<Plus size={16} />
-					Add {activeTab === "guide" ? "Guide" : "Panel"} Criterion
-				</Button>
+				{selectedReviewId && (
+					<Button variant="outline" className="w-full gap-2 border-dashed" onClick={addCriteria}>
+						<Plus size={16} />
+						Add {activeTab === "guide" ? "Guide" : "Panel"} Criterion
+					</Button>
+				)}
 			</div>
 		</div>
 	);
