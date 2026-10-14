@@ -42,7 +42,7 @@ export default function RubricsPage() {
 	// Shown on the disabled Add / Save buttons while the program has no review
 	const noReviewHint = selectedReviewId
 		? undefined
-		: `Create a ${programLabel(program)} review first — rubrics belong to a review.`;
+		: `Create ${program === "mtech" ? "an" : "a"} ${programLabel(program)} review first — rubrics belong to a review.`;
 
 	useEffect(() => {
 		async function init() {
